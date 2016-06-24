@@ -1,0 +1,64 @@
+A = Active
+B = Activate
+C = Deactivate
+D = Current
+
+Alphabet = { a, b }
+
+[0] start
+a => [1]
+a => [3]
+
+[1]
+b => [2]
+b => [3]
+
+[2] accept
+_ => [0]
+
+[3]
+b => [1]
+a => [0]
+
+for each c in string {
+    _:
+        if [2] is active then disable [2] then enable { [0] }
+
+    switch(c) {
+        'a':
+            if [0] is active then disable [0] then enable { [1], [3] }
+            if [3] is active then disable [3] then enable { [0] }
+            break;
+        'b':
+            if [1] is active then disable [1] then enable { [2], [3] }
+            if [3] is active then disable [3] then enable { [1] }
+            break;
+    }
+}
+
+return (D & 0010) == 0;
+
+
+
+if [0] is active then disable [0] then enable { [1], [3] }
+
+x86:
+
+BT D, 0
+jnc if_not_zero
+and D, 0111
+or  D, 0101
+if_not_zero:
+BT D, 3
+jnc if_not_three
+and D, 1110
+or  D, 1000
+if_not_three
+
+arm:
+
+TST D, 1000
+bne if_not_zero
+and D, 0111
+or  D, 0101
+if_not_zero:
