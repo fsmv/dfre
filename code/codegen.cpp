@@ -80,8 +80,9 @@ GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
         nfa_transition *Arc = &ArcList->Transitions[TransitionIdx];
 
         if (Arc->From != DisableState) {
-            // TODO(fsmv): DisableState isn't correct in the code output
-            Code = GenCodeTransitionSet(DisableState, ActivateMask, LabelPrefix, Code);
+            if (DisableState != -1) {
+                Code = GenCodeTransitionSet(DisableState, ActivateMask, LabelPrefix, Code);
+            }
 
             ActivateMask = (1 << Arc->To);
             DisableState = Arc->From;
@@ -183,7 +184,7 @@ size_t GenerateCode(nfa *NFA, uint8_t *Code) {
 
             Code = GenCodeLiteral("je  Match_", Code);
             Code = GenCodeLiteral(LabelIdent, Code);
-            Code = GenCodeLiteral("\n", Code);
+            Code = GenCodeLiteral(":\n", Code);
         }
     }
 
