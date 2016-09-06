@@ -9,9 +9,14 @@ size_t WriteInt(uint32_t A, char *Str) {
     size_t CharCount = 0;
 
     // Write the string backwards
-    uint32_t base = 10;
+    uint32_t base = 16;
     do {
-        *Str++ = '0' + (A % base);
+        uint32_t digit = A % base;
+        if (digit < 10) {
+            *Str++ = '0' + digit;
+        } else {
+            *Str++ = 'A' + (digit - 10);
+        }
         A /= base;
         CharCount += 1;
     } while (A > 0);
@@ -30,7 +35,7 @@ size_t WriteInt(uint32_t A, char *Str) {
 }
 
 #include "parser.cpp"
-#include "codegen.cpp"
+#include "bits_codegen.cpp"
 
 #include <windows.h>
 
@@ -156,7 +161,22 @@ int main(int argc, char *argv[]) {
     WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
     }
 
-    WriteConsoleA(Out, Code, CodeWritten, &CharsWritten, 0);
+    for (int i = 0; i < CodeWritten; ++i) {
+        char IntStr[5];
+        size_t IntStrCount;
+        if (Code[i] < 0x10) {
+            IntStr[0] = '0';
+            IntStrCount = WriteInt(Code[i], IntStr+1) + 1;
+        } else {
+            IntStrCount = WriteInt(Code[i], IntStr);
+        }
+
+        IntStr[IntStrCount] = ' ';
+
+        WriteConsoleA(Out, IntStr, IntStrCount+1, &CharsWritten, 0);
+    }
+
+    //WriteConsoleA(Out, Code, CodeWritten, &CharsWritten, 0);
 
     return 0;
 }
