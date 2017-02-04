@@ -112,7 +112,7 @@ void PrintNFA(HANDLE Out, nfa *NFA) {
     }
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     HANDLE Out = GetStdHandle(STD_OUTPUT_HANDLE);
 
     if (!Out || Out == INVALID_HANDLE_VALUE) {
@@ -120,8 +120,33 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (argc != 2) {
-        Print(Out, "Usage: %s [regex]\n", argv[0]);
+    // Parse the command line
+    char *CommandLine = GetCommandLineA();
+    char *ProgName = CommandLine;
+    char *Regex = CommandLine + 1;
+    // Find the end of ProgName
+    for (; *Regex; ++Regex) {
+        if (*Regex == ' ' && *(Regex - 1) != '\\') {
+            break;
+        }
+    }
+    if (*Regex) {
+        *Regex = '\0';
+        Regex += 1;
+
+        // Find the start of Regex
+        for (; *Regex && *Regex == ' '; ++Regex)
+            ;
+
+        if (!(*Regex)) { // No non space char after ProgName
+            Regex = 0;
+        }
+    } else { // no space after ProgName
+        Regex = 0;
+    }
+
+    if (!Regex) {
+        Print(Out, "Usage: %s [regex]\n", ProgName);
         return 1;
     }
 
@@ -135,7 +160,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    ReParse(argv[1], NFA);
+    ReParse(Regex, NFA);
     PrintNFA(Out, NFA);
 
 #define CodeLen 1024
@@ -164,4 +189,10 @@ int main(int argc, char *argv[]) {
     //WriteConsoleA(Out, Code, CodeWritten, &CharsWritten, 0);
 
     return 0;
+}
+
+int mainCRTStartup() {
+    int Result;
+    Result = main();
+    ExitProcess(Result);
 }
