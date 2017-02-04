@@ -5,11 +5,10 @@
 #define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-size_t WriteInt(uint32_t A, char *Str) {
+size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
     size_t CharCount = 0;
 
     // Write the string backwards
-    uint32_t base = 16;
     do {
         uint32_t digit = A % base;
         if (digit < 10) {
@@ -39,52 +38,68 @@ size_t WriteInt(uint32_t A, char *Str) {
 
 #include <windows.h>
 
+#include <stdarg.h>
+void Print(HANDLE Out, const char *FormatString, ...) {
+    va_list args;
+    va_start(args, FormatString);
+
+    DWORD CharsWritten;
+    size_t Idx = 0;
+    for (; FormatString[Idx]; ++Idx) {
+        if (FormatString[Idx] == '%') {
+            switch (FormatString[Idx + 1]) {
+            case 's': {
+                // Write the string up to the percent
+                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
+
+                char *Str = va_arg(args, char*);
+                size_t Len = 0;
+                for (; Str[Len]; ++Len)
+                    ;
+                WriteConsoleA(Out, Str, Len, &CharsWritten, 0);
+
+            } goto next;
+            case 'c': {
+                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
+
+                char Char = va_arg(args, char);
+                WriteConsoleA(Out, &Char, 1, &CharsWritten, 0);
+
+            } goto next;
+            case 'u': {
+                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
+
+                uint32_t Int = va_arg(args, uint32_t);
+                char Buffer[10];
+                size_t Len = WriteInt(Int, Buffer, 10);
+                WriteConsoleA(Out, Buffer, Len, &CharsWritten, 0);
+
+            } goto next;
+            next:
+                // Skip the %s
+                FormatString += Idx + 2;
+                Idx = 0;
+            default: ;
+            }
+        }
+    }
+
+    if (Idx != 0) {
+        WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
+    }
+
+    va_end(args);
+}
 
 void PrintNFA(HANDLE Out, nfa *NFA) {
     DWORD CharsWritten;
-    {
-    char Msg[] = "Number of states: ";
-    WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-    }
-
-    char IntStr[10];
-    size_t IntStrCount = WriteInt(NFA->NumStates, IntStr);
-    WriteConsoleA(Out, IntStr, IntStrCount, &CharsWritten, 0);
-
-    {
-    char Msg[] = "\n";
-    WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-    }
+    Print(Out, "Number of states: %u\n", NFA->NumStates);
 
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
         nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
 
-        {
-        char Msg[] = "Label: ";
-        WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-        }
-
-        IntStrCount = WriteInt(ArcList->Label.Type, IntStr);
-        WriteConsoleA(Out, IntStr, IntStrCount, &CharsWritten, 0);
-
-        {
-        char Msg[] = ", ";
-        WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-        }
-
-        WriteConsoleA(Out, &ArcList->Label.A, 1, &CharsWritten, 0);
-
-        {
-        char Msg[] = ", ";
-        WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-        }
-
-        WriteConsoleA(Out, &ArcList->Label.B, 1, &CharsWritten, 0);
-
-        {
-        char Msg[] = "\n";
-        WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-        }
+        Print(Out, "Label: %u, %c, %c\n",
+              ArcList->Label.Type, ArcList->Label.A, ArcList->Label.B);
 
         for (size_t TransitionIdx = 0;
              TransitionIdx < ArcList->TransitionCount;
@@ -92,48 +107,21 @@ void PrintNFA(HANDLE Out, nfa *NFA) {
         {
             nfa_transition *Transition = &ArcList->Transitions[TransitionIdx];
 
-            {
-            char Msg[] = "\t";
-            WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-            }
-
-            IntStrCount = WriteInt(Transition->From, IntStr);
-            WriteConsoleA(Out, IntStr, IntStrCount, &CharsWritten, 0);
-
-            {
-            char Msg[] = " => ";
-            WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-            }
-
-            IntStrCount = WriteInt(Transition->To, IntStr);
-            WriteConsoleA(Out, IntStr, IntStrCount, &CharsWritten, 0);
-
-            {
-            char Msg[] = "\n";
-            WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-            }
+            Print(Out, "\t%u => %u\n", Transition->From, Transition->To);
         }
     }
 }
 
 int main(int argc, char *argv[]) {
     HANDLE Out = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD CharsWritten;
+
     if (!Out || Out == INVALID_HANDLE_VALUE) {
         MessageBox(0, "Could not get std Out", 0, MB_OK | MB_ICONERROR);
         return 1;
     }
 
     if (argc != 2) {
-        char Usage1[] = "Usage: ";
-        char Usage2[] = " [regex]\n";
-
-        uint32_t Argv0Length = 0;
-        for (char *Idx = argv[0]; *Idx != '\0'; ++Idx, ++Argv0Length) { }
-
-        WriteConsoleA(Out, Usage1, ArrayLength(Usage1) - 1, &CharsWritten, 0);
-        WriteConsoleA(Out, argv[0], Argv0Length, &CharsWritten, 0);
-        WriteConsoleA(Out, Usage2, ArrayLength(Usage2) - 1, &CharsWritten, 0);
+        Print(Out, "Usage: %s [regex]\n", argv[0]);
         return 1;
     }
 
@@ -143,8 +131,7 @@ int main(int argc, char *argv[]) {
     NFA->SizeOfArcList = ArcListSize;
 
     if (!NFA) {
-        char Msg[] = "Could not allocate space for NFA\n";
-        WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
+        Print(Out, "Could not allocate space for NFA\n");
         return 1;
     }
 
@@ -156,11 +143,9 @@ int main(int argc, char *argv[]) {
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeLen, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     size_t CodeWritten = GenerateCode(NFA, Code);
 
-    {
-    char Msg[] = "\n";
-    WriteConsoleA(Out, Msg, ArrayLength(Msg) - 1, &CharsWritten, 0);
-    }
+    Print(Out, "\n");
 
+    DWORD CharsWritten;
     for (int i = 0; i < CodeWritten; ++i) {
         char IntStr[5];
         size_t IntStrCount;
