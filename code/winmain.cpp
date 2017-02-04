@@ -112,6 +112,8 @@ void PrintNFA(HANDLE Out, nfa *NFA) {
     }
 }
 
+#include "x86_opcode.h"
+
 int main() {
     HANDLE Out = GetStdHandle(STD_OUTPUT_HANDLE);
 
@@ -166,7 +168,59 @@ int main() {
 #define CodeLen 1024
 
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeLen, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    size_t CodeWritten = GenerateCode(NFA, Code);
+    //size_t CodeWritten = GenerateCode(NFA, Code);
+    size_t CodeWritten = 0;
+
+    CodeWritten += WriteOpcode(OpJump8(JMP, 1), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump8(JNC, 2), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump8(JE , 3), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump8(JNE, 4), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump8(JL , 5), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump8(JG , 6), Code + CodeWritten);
+
+    CodeWritten += WriteOpcode(OpJump32(JMP, 0x12ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JNC, 0x22ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JE,  0x32ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JE,  0x00000000), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JNE, 0x42ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JL,  0x52ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpJump32(JG,  0x62ABCDEF), Code + CodeWritten);
+
+    CodeWritten += WriteOpcode(OpReg(INC, REG,  EAX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpReg(INC, REG,  EAX, false), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpReg(INC, MEM,  ECX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpReg(INC, MEM,  EDX, false), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpReg(INC, REG,  EBX, false), Code + CodeWritten);
+
+    CodeWritten += WriteOpcode(OpRegReg(AND, REG, EAX, EAX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(OR , MEM, EBX, ECX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(XOR, REG, EDX, EDX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(XOR, MEM, EDX, EDX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(XOR, MEM, EDX, EDX, false), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(CMP, REG, ECX, EBX, true), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(CMP, REG, ECX, EBX, false), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(CMP, REG, EAX, EAX, false), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegReg(MOV, MEM, EAX, EBX, true), Code + CodeWritten);
+
+    CodeWritten += WriteOpcode(OpRegI8(BT , MEM, EAX, 5), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(BT , MEM, EBX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(BT , REG, EAX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(AND, REG, EAX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(OR , REG, ECX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(XOR, REG, EDX, 1), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(XOR, MEM, EAX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(CMP, REG, EBX, 3), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(MOV, REG, ECX, 0), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI8(MOV, MEM, EAX, 5), Code + CodeWritten);
+
+    CodeWritten += WriteOpcode(OpRegI32(AND, REG, EAX, 0x12ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(OR , REG, ECX, 0x22ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(XOR, REG, EDX, 0x32ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(XOR, MEM, EAX, 0x42ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(CMP, MEM, EBX, 0x52ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(CMP, REG, EBX, 0x62ABCDEF), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(MOV, REG, EAX, 0x00000000), Code + CodeWritten);
+    CodeWritten += WriteOpcode(OpRegI32(MOV, MEM, EAX, 0x82ABCDEF), Code + CodeWritten);
 
     Print(Out, "\n");
 
@@ -191,7 +245,7 @@ int main() {
     return 0;
 }
 
-int mainCRTStartup() {
+void __stdcall mainCRTStartup() {
     int Result;
     Result = main();
     ExitProcess(Result);
