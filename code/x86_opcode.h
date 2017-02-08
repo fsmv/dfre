@@ -44,11 +44,11 @@ enum jop {
     JMP = 0, JNC, JE, JNE, JL, JG
 };
 
-const uint16_t Op_MemReg[] = 
-{ 0x0020, 0x0008, 0x0030,
-  0x00FE,
-  0x0000, 0x0038,
-  0x0088};
+const uint8_t Op_MemReg[] = 
+{ 0x20, 0x08, 0x30,
+  0xFE,
+  0x00, 0x38,
+  0x88};
 const uint16_t Op_Imm[] =
 { 0x0080, 0x0080, 0x0080,
   0x0000,
@@ -87,10 +87,10 @@ opcode_unpacked OpJump32(jop Op, int32_t Offs) {
 
     uint32_t OffsUn = (uint32_t) Offs;
 
-    Result.Immediate[0] = (OffsUn & 0xFF);
-    Result.Immediate[1] = (OffsUn & 0xFF00) >> 8;
-    Result.Immediate[2] = (OffsUn & 0xFF0000) >> 16;
-    Result.Immediate[3] = (OffsUn & 0xFF000000) >> 24;
+    Result.Immediate[0] = (uint8_t)  (OffsUn & 0xFF);
+    Result.Immediate[1] = (uint8_t) ((OffsUn & 0xFF00) >> 8);
+    Result.Immediate[2] = (uint8_t) ((OffsUn & 0xFF0000) >> 16);
+    Result.Immediate[3] = (uint8_t) ((OffsUn & 0xFF000000) >> 24);
 
     Result.HasModRM = false;
     Result.ImmCount = 4;
@@ -171,10 +171,10 @@ opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, uint32_t Imm)
     Result.ModRM |= (Op_Extra[Op] & 0x07) << 3;
     Result.ModRM |= DestReg;
 
-    Result.Immediate[0] = (Imm & 0xFF);
-    Result.Immediate[1] = (Imm & 0xFF00) >> 8;
-    Result.Immediate[2] = (Imm & 0xFF0000) >> 16;
-    Result.Immediate[3] = (Imm & 0xFF000000) >> 24;
+    Result.Immediate[0] = (uint8_t) (Imm & 0xFF);
+    Result.Immediate[1] = (uint8_t) ((Imm & 0xFF00) >> 8);
+    Result.Immediate[2] = (uint8_t) ((Imm & 0xFF0000) >> 16);
+    Result.Immediate[3] = (uint8_t) ((Imm & 0xFF000000) >> 24);
 
     Result.HasModRM = true;
     Result.ImmCount = 4;

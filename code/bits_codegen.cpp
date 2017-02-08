@@ -45,6 +45,8 @@ void NFASortArcList(nfa_arc_list *ArcList) {
     }
 }
 
+#pragma warning(push)
+#pragma warning(disable:4100) //TODO: LabelPrefix is unused
 uint8_t *
 GenCodeTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
                      const char *LabelPrefix, uint8_t *Code)
@@ -69,15 +71,16 @@ GenCodeTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
 
     return Code;
 }
+#pragma warning(pop)
 
 uint8_t *
 GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
     RR32(XOR, REG, ECX, ECX);
-    RI32(MOV, REG, EDX, -1);
+    RI32(MOV, REG, EDX, 0xFFFFFFFF);
 
     NFASortArcList(ArcList);
 
-    uint32_t DisableState = -1;
+    uint32_t DisableState = (uint32_t) -1;
     // TODO(fsmv): big int here
     uint32_t ActivateMask = 0;
     for (size_t TransitionIdx = 0;

@@ -30,10 +30,12 @@ void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
     *TransitionLocation = Transition;
 }
 
+#define NULLSTATE ((uint32_t) -1)
+
 void ReParse(char *regex, nfa *NFA) {
     NFA->NumStates = 1;
 
-    uint32_t LoopBackState = -1;
+    uint32_t LoopBackState = NULLSTATE;
 
     // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
     nfa_label EpsilonLabel = {};
@@ -64,7 +66,7 @@ void ReParse(char *regex, nfa *NFA) {
                 NFAAddArc(NFA, Label, Transition);
             } break;
             case '*': {
-                Assert(LoopBackState != -1);
+                Assert(LoopBackState != NULLSTATE);
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
@@ -84,10 +86,10 @@ void ReParse(char *regex, nfa *NFA) {
 
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = -1;
+                LoopBackState = NULLSTATE;
             } break;
             case '+': {
-                Assert(LoopBackState != -1);
+                Assert(LoopBackState != NULLSTATE);
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
@@ -98,10 +100,10 @@ void ReParse(char *regex, nfa *NFA) {
 
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = -1;
+                LoopBackState = NULLSTATE;
             } break;
             case '?': {
-                Assert(LoopBackState != -1);
+                Assert(LoopBackState != NULLSTATE);
 
                 int LastAccept = NFA->NumStates - 1;
                 int NewAccept = NFA->NumStates++;
@@ -119,7 +121,7 @@ void ReParse(char *regex, nfa *NFA) {
 
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = -1;
+                LoopBackState = NULLSTATE;
             } break;
 
             //TODO: Impliment these:

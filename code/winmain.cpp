@@ -12,9 +12,9 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
     do {
         uint32_t digit = A % base;
         if (digit < 10) {
-            *Str++ = '0' + digit;
+            *Str++ = '0' + (char) digit;
         } else {
-            *Str++ = 'A' + (digit - 10);
+            *Str++ = 'A' + (char) (digit - 10);
         }
         A /= base;
         CharCount += 1;
@@ -44,7 +44,7 @@ void Print(HANDLE Out, const char *FormatString, ...) {
     va_start(args, FormatString);
 
     DWORD CharsWritten;
-    size_t Idx = 0;
+    DWORD Idx = 0;
     for (; FormatString[Idx]; ++Idx) {
         if (FormatString[Idx] == '%') {
             switch (FormatString[Idx + 1]) {
@@ -53,7 +53,7 @@ void Print(HANDLE Out, const char *FormatString, ...) {
                 WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
 
                 char *Str = va_arg(args, char*);
-                size_t Len = 0;
+                DWORD Len = 0;
                 for (; Str[Len]; ++Len)
                     ;
                 WriteConsoleA(Out, Str, Len, &CharsWritten, 0);
@@ -71,7 +71,7 @@ void Print(HANDLE Out, const char *FormatString, ...) {
 
                 uint32_t Int = va_arg(args, uint32_t);
                 char Buffer[10];
-                size_t Len = WriteInt(Int, Buffer, 10);
+                DWORD Len = (DWORD) WriteInt(Int, Buffer, 10);
                 WriteConsoleA(Out, Buffer, Len, &CharsWritten, 0);
 
             } goto next;
@@ -92,7 +92,6 @@ void Print(HANDLE Out, const char *FormatString, ...) {
 }
 
 void PrintNFA(HANDLE Out, nfa *NFA) {
-    DWORD CharsWritten;
     Print(Out, "Number of states: %u\n", NFA->NumStates);
 
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
@@ -183,7 +182,7 @@ int main() {
 
         IntStr[IntStrCount] = ' ';
 
-        WriteConsoleA(Out, IntStr, IntStrCount+1, &CharsWritten, 0);
+        WriteConsoleA(Out, IntStr, (DWORD) IntStrCount+1, &CharsWritten, 0);
     }
 
     //WriteConsoleA(Out, Code, CodeWritten, &CharsWritten, 0);

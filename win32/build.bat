@@ -21,7 +21,7 @@ set CompilerOptions=%CompilerOptions% -Zl
 rem Output full file paths paths in error messages
 set CompilerOptions=%CompilerOptions% -FC
 rem Enable all warnings and treat warnings as errors
-rem set CompilerOptions=%CompilerOptions% -W4 -WX
+set CompilerOptions=%CompilerOptions% -W4 -WX
 rem Put debug info in the obj file (don't make pdb files)
 set CompilerOptions=%CompilerOptions% -Z7
 
