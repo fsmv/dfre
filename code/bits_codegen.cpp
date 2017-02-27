@@ -69,6 +69,8 @@ GenCodeTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
     //Code += WriteInt(DisableState, (char*) Code);
     //Code = GenCodeLiteral(":\n", Code);
 
+    //Label(LabelPrefix, DisableState);
+
     return Code;
 }
 #pragma warning(pop)
