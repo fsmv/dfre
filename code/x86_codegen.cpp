@@ -4,24 +4,6 @@
 #include "nfa.h"
 #include "x86_opcode.h"
 
-uint8_t *GenCodeLiteral(const char *String, uint8_t *Code, int32_t len = -1) {
-    size_t i = 0;
-    while(*String || (len != -1 && i < len)) {
-        *Code++ = *String++;
-        ++i;
-    }
-
-    return Code;
-}
-
-inline uint8_t *GenCodeInt32(uint32_t Int, uint8_t *Code) {
-    *Code++ = (uint8_t) ((Int &       0xFF) >>  0);
-    *Code++ = (uint8_t) ((Int &     0xFF00) >>  8);
-    *Code++ = (uint8_t) ((Int &   0xFF0000) >> 16);
-    *Code++ = (uint8_t) ((Int & 0xFF000000) >> 24);
-    return Code;
-}
-
 void NFASortArcList(nfa_arc_list *ArcList) {
     // TODO(fsmv): Replace with radix sort or something
 
@@ -45,38 +27,25 @@ void NFASortArcList(nfa_arc_list *ArcList) {
     }
 }
 
-#pragma warning(push)
-#pragma warning(disable:4100) //TODO: LabelPrefix is unused
-uint8_t *
-GenCodeTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
-                     const char *LabelPrefix, uint8_t *Code)
+instruction *
+GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
+                             instruction *Instructions)
 {
     RI8(BT, MEM, EBX, (uint8_t) DisableState);
-
-    // TODO: Do a save location then fill in jump later thing
-    J8(JNC, 0x0C);
-    //Code = GenCodeLiteral("jnc ", Code);
-    //Code = GenCodeLiteral(LabelPrefix, Code);
-    //Code += WriteInt(DisableState, (char*) Code);
-    //*Code++ = '\n';
+    instruction *Jump = J(JNC);
 
     uint32_t DisableMask = (1 << DisableState) ^ -1;
     RI32(AND, REG, EDX, DisableMask); // 2 + 4 bytes
 
     RI32(OR, REG, ECX, ActivateMask); // 2 + 4 bytes
 
-    //Code = GenCodeLiteral(LabelPrefix, Code);
-    //Code += WriteInt(DisableState, (char*) Code);
-    //Code = GenCodeLiteral(":\n", Code);
+    Jump->JumpDest = Instructions;
 
-    //Label(LabelPrefix, DisableState);
-
-    return Code;
+    return Instructions;
 }
-#pragma warning(pop)
 
-uint8_t *
-GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
+instruction *
+GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
     RR32(XOR, REG, ECX, ECX);
     RI32(MOV, REG, EDX, 0xFFFFFFFF);
 
@@ -93,7 +62,7 @@ GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
 
         if (Arc->From != DisableState) {
             if (DisableState != -1) {
-                Code = GenCodeTransitionSet(DisableState, ActivateMask, LabelPrefix, Code);
+                Instructions = GenInstructionsTransitionSet(DisableState, ActivateMask, Instructions);
             }
 
             ActivateMask = (1 << Arc->To);
@@ -104,14 +73,14 @@ GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
     }
 
     if (DisableState != -1) {
-        Code = GenCodeTransitionSet(DisableState, ActivateMask, LabelPrefix, Code);
+        Instructions = GenInstructionsTransitionSet(DisableState, ActivateMask, Instructions);
     }
 
     // TODO: these might need to be changed to REG. Text said MEM bits does REG
     RR32(AND, MEM, EBX, EDX);
     RR32(OR, MEM, EBX, ECX);
 
-    return Code;
+    return Instructions;
 }
 
 /**
@@ -121,138 +90,185 @@ GenCodeArcList(nfa_arc_list *ArcList, const char *LabelPrefix, uint8_t *Code) {
  *   ecx = uint32_t CurrentDisables  [clobbered]
  *   edx = uint32_t CurrentEnables   [clobbered]
  */
-size_t GenerateCode(nfa *NFA, uint8_t *Code) {
-    uint8_t *CodeStart = Code;
+size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
+    instruction *InstructionsStart = Instructions;
 
-    //Code = GenCodeLiteral("CheckChar:\n", Code);
+    instruction *CheckCharLoc = Instructions;
 
     RR32(XOR, REG, EBX, EBX);
 
     // Epsilon arcs, garunteed to be the first arc list
-    //Code = GenCodeLiteral("; Epsilon Arcs\n", Code);
     nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
     Assert(EpsilonArcs->Label.Type == EPSILON);
-    Code = GenCodeArcList(EpsilonArcs, "EpsilonArcs_", Code);
+    Instructions = GenInstructionsArcList(EpsilonArcs, Instructions);
 
     // Dot arcs, garunteed to be the second arc list
-    //Code = GenCodeLiteral("; Dot Arcs\n", Code);
     nfa_arc_list *DotArcs = NFAGetArcList(NFA, 1);
     Assert(DotArcs->Label.Type == DOT);
-    Code = GenCodeArcList(DotArcs, "DotArcs_", Code);
+    Instructions = GenInstructionsArcList(DotArcs, Instructions);
 
     // Range arcs
-    //Code = GenCodeLiteral("; Range Arcs\n", Code);
     for (size_t ArcListIdx = 2; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
         nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
 
         if (ArcList->Label.Type == RANGE) {
-            char LabelIdent[3];
-            LabelIdent[0] = ArcList->Label.A;
-            LabelIdent[1] = ArcList->Label.B;
-            LabelIdent[2] = '\0';
-
-            char ArcListLabelPrefix[14];
-            // TODO(fsmv): rename to stringcopy or something
-            GenCodeLiteral("RangeArcs_", (uint8_t *)ArcListLabelPrefix);
-            ArcListLabelPrefix[10] = ArcList->Label.A;
-            ArcListLabelPrefix[11] = ArcList->Label.B;
-            ArcListLabelPrefix[12] = '_';
-            ArcListLabelPrefix[13] = '\0';
-
             RI8(CMP, MEM, EAX, ArcList->Label.A);
-
-            //Code = GenCodeLiteral("jl  NotInRange_", Code);
-            //Code = GenCodeLiteral(LabelIdent, Code);
-            //Code = GenCodeLiteral("\n", Code);
-            Code = GenCodeLiteral("\x7C\x00", Code);
-            uint8_t *JumpSpot1 = Code;
+            instruction *Jump1 = J(JL);
 
             RI8(CMP, MEM, EAX, ArcList->Label.B);
+            instruction *Jump2 = J(JG);
 
-            //Code = GenCodeLiteral("jg  NotInRange_", Code);
-            //Code = GenCodeLiteral(LabelIdent, Code);
-            //Code = GenCodeLiteral("\n", Code);
-            Code = GenCodeLiteral("\x7F\x00", Code);
-            uint8_t *JumpSpot2 = Code;
+            Instructions = GenInstructionsArcList(ArcList, Instructions);
 
-            Code = GenCodeArcList(ArcList, ArcListLabelPrefix, Code);
-
-            *(JumpSpot1 - 1) = (uint8_t) (JumpSpot1 - Code);
-            *(JumpSpot2 - 1) = (uint8_t) (JumpSpot2 - Code);
-
-            //Code = GenCodeLiteral("NotInRange_", Code);
-            //Code = GenCodeLiteral(LabelIdent, Code);
-            //Code = GenCodeLiteral(":\n", Code);
+            Jump1->JumpDest = Instructions;
+            Jump2->JumpDest = Instructions;
         }
     }
 
-    // Match arcs
-    uint8_t *JumpLocations[(1 << 8) - 1];
-    uint8_t *MatchEndJumpLocations[(1 << 8) - 1];
-    size_t MatchEndJumpLocationsSize = 0;
+    // Match Arcs
 
-    //Code = GenCodeLiteral("; Match Arcs\n", Code);
+    // Used for building a linked list to store which instructions need JumpDest filled in
+    instruction *LastMatchCharJmp = 0;
+    instruction *LastMatchEndJmp = 0;
+
+    // Write test and jump for each letter to match. The cases of a switch statement
     for (size_t ArcListIdx = 2; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
         nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
 
         if (ArcList->Label.Type == MATCH) {
-            char LabelIdent[2];
-            LabelIdent[0] = ArcList->Label.A;
-            LabelIdent[1] = '\0';
-
             RI8(CMP, MEM, EAX, ArcList->Label.A);
-
-            //Code = GenCodeLiteral("je  Match_", Code);
-            //Code = GenCodeLiteral(LabelIdent, Code);
-            Code = GenCodeLiteral("\x0F\x84\xFF\xFF\xFF\xFF", Code);
-            JumpLocations[ArcList->Label.A] = Code;
+            instruction *NextMatchCharJmp = J(JE);
+            // do a linked list so we can find where to fill in the jump dests
+            NextMatchCharJmp->JumpDest = LastMatchCharJmp;
+            LastMatchCharJmp = NextMatchCharJmp;
         }
     }
 
-    //Code = GenCodeLiteral("jmp Match_End\n", Code);
-    Code = GenCodeLiteral("\xE9\xFF\xFF\xFF\xFF", Code);
-    MatchEndJumpLocations[MatchEndJumpLocationsSize++] = Code;
+    // jump to the end if it's not a character we want to match
+    {
+        // again, do a linked list so we can fill in the jump dests
+        instruction *NextMatchEndJmp = J(JMP);
+        NextMatchEndJmp->JumpDest = LastMatchEndJmp;
+        LastMatchEndJmp = NextMatchEndJmp;
+    }
 
-    for (size_t ArcListIdx = 1; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
+    // Write the body of the switch statement for each char
+    // loop backwards because the linked list for MatchChar jumps is backwards
+    for (size_t ArcListIdx = NFA->ArcListCount - 1; ArcListIdx >= 2; --ArcListIdx) {
         nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
 
         if (ArcList->Label.Type == MATCH) {
-            char LabelIdent[2];
-            LabelIdent[0] = ArcList->Label.A;
-            LabelIdent[1] = '\0';
+            // Fill the last jump dest in the linked list with this location,
+            // then advance the linked list
+            instruction *NextMatchCharJmp = LastMatchCharJmp->JumpDest;
+            LastMatchCharJmp->JumpDest = Instructions;
+            LastMatchCharJmp = NextMatchCharJmp;
 
-            char ArcListLabelPrefix[13];
-            // TODO(fsmv): rename to stringcopy or something
-            GenCodeLiteral("MatchArcs_", (uint8_t *)ArcListLabelPrefix);
-            ArcListLabelPrefix[10] = ArcList->Label.A;
-            ArcListLabelPrefix[11] = '_';
-            ArcListLabelPrefix[12] = '\0';
+            Instructions = GenInstructionsArcList(ArcList, Instructions);
 
-            //Code = GenCodeLiteral("Match_", Code);
-            //Code = GenCodeLiteral(LabelIdent, Code);
-            //Code = GenCodeLiteral(":\n", Code);
-            uint32_t JumpLen = (uint32_t) (Code - JumpLocations[ArcList->Label.A]);
-            GenCodeInt32(JumpLen, JumpLocations[ArcList->Label.A] - 4);
-
-            Code = GenCodeArcList(ArcList, ArcListLabelPrefix, Code);
-
-            //Code = GenCodeLiteral("jmp Match_End\n", Code);
-            Code = GenCodeLiteral("\xE9\xFF\xFF\xFF\xFF", Code);
-            MatchEndJumpLocations[MatchEndJumpLocationsSize++] = Code;
+            // again, do a linked list so we can fill in the jump dests
+            instruction *NextMatchEndJmp = J(JMP);
+            NextMatchEndJmp->JumpDest = LastMatchEndJmp;
         }
     }
 
-    //Code = GenCodeLiteral("Match_End:\n", Code);
-    for (int i = 0; i < MatchEndJumpLocationsSize; ++i) {
-        uint32_t JumpLen = (uint32_t) (Code - MatchEndJumpLocations[i]);
-        GenCodeInt32(JumpLen, MatchEndJumpLocations[i] - 4);
+    // Fill in the break jump locations
+    instruction *MatchEnd = Instructions;
+    while(LastMatchEndJmp) {
+        instruction *NextMatchEndJmp = LastMatchEndJmp->JumpDest;
+        LastMatchEndJmp->JumpDest = MatchEnd;
+        LastMatchEndJmp = NextMatchEndJmp;
     }
 
     INC32(REG, EAX);
     RI8(CMP, MEM, EAX, 0);
-    //Code = GenCodeLiteral("jne CheckChar\n", Code);
-    Code = GenCodeLiteral("\x0F\x85\xFF\xFF\xFF\xFF", Code);
-    GenCodeInt32((uint32_t)(CodeStart - Code), Code - 4);
+    instruction *JmpToCheckChar = J(JNE);
+    JmpToCheckChar->JumpDest = CheckCharLoc;
 
-    return Code - CodeStart;
+    return Instructions - InstructionsStart;
+}
+
+int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size_t JumpDestIdx) {
+    size_t MinIdx = JumpIdx;
+    size_t MaxIdx = JumpDestIdx;
+    if (MinIdx > MaxIdx) {
+        size_t Temp = MinIdx;
+        MinIdx = MaxIdx;
+        MaxIdx = Temp;
+    } else {
+        MinIdx += 1; // if it's a forward jump, don't count the actual jump instruction
+    }
+
+    size_t JumpOffset = 0;
+    for (size_t Idx = MinIdx; Idx < MaxIdx; ++Idx) {
+        JumpOffset += SizeOpcode(UnpackedOpcodes[Idx]);
+    }
+
+    int32_t Result = (int32_t) JumpOffset;
+
+    if (JumpDestIdx < JumpIdx) {
+        Result *= -1;
+    }
+
+    return Result;
+}
+
+void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opcode_unpacked *UnpackedOpcodes) {
+    opcode_unpacked *NextOpcode = UnpackedOpcodes;
+    for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
+        instruction *Instr = &Instructions[Idx];
+
+        switch(Instr->Type) {
+            case JUMP:
+            {
+                int32_t JumpDist = (int32_t) (Instr->JumpDest - Instr);
+                // We don't know how big the ops between here and the dest are yet
+                int32_t JumpOffsetUpperBound = JumpDist * MAX_OPCODE_LEN;
+
+                if (JumpOffsetUpperBound < -128 || JumpOffsetUpperBound > 127) {
+                    *(NextOpcode++) = OpJump32(Instr->Op, 0);
+                } else {
+                    *(NextOpcode++) = OpJump8(Instr->Op, 0);
+                }
+            }break;
+            case ONE_REG:
+                *(NextOpcode++) = OpReg(Instr->Op, Instr->Mode, Instr->Dest, Instr->Int32);
+                break;
+            case TWO_REG:
+                *(NextOpcode++) = OpRegReg(Instr->Op, Instr->Mode, Instr->Dest, Instr->Src, Instr->Int32);
+                break;
+            case REG_IMM:
+                if (Instr->Int32) {
+                    *(NextOpcode++) = OpRegI32(Instr->Op, Instr->Mode, Instr->Dest, Instr->Imm);
+                } else {
+                    *(NextOpcode++) = OpRegI8(Instr->Op, Instr->Mode, Instr->Dest, (uint8_t) Instr->Imm);
+                }
+                break;
+        }
+    }
+
+    for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
+        instruction *Instr = &Instructions[Idx];
+        if (Instr->Type == JUMP) {
+            size_t JumpDestIdx = Idx + (Instr->JumpDest - Instr);
+            int32_t JumpOffset = ComputeJumpOffset(UnpackedOpcodes, Idx, JumpDestIdx);
+
+            if (UnpackedOpcodes[Idx].ImmCount == 1) {
+                Assert(-128 <= JumpOffset && JumpOffset <= 127);
+                UnpackedOpcodes[Idx] = OpJump8(Instr->Op, (int8_t) JumpOffset);
+            } else if (UnpackedOpcodes[Idx].ImmCount == 4) {
+                UnpackedOpcodes[Idx] = OpJump32(Instr->Op, JumpOffset);
+            }
+        }
+    }
+}
+
+size_t PackCode(opcode_unpacked *UnpackedOpcodes, size_t NumOpcodes, uint8_t *Code) {
+    uint8_t *CodeStart = Code;
+
+    for (size_t Idx = 0; Idx < NumOpcodes; ++Idx) {
+        Code = WriteOpcode(UnpackedOpcodes[Idx], Code);
+    }
+
+    return (size_t) (Code - CodeStart);
 }

@@ -34,7 +34,7 @@
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #include "parser.cpp"
-#include "bits_codegen.cpp"
+#include "x86_codegen.cpp"
 
 // Write an integer to a string in the specified base (not using CRT)
 size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
@@ -221,14 +221,14 @@ int main() {
     }
 
     // Turn the instructions into x86 op codes and resolve jump destinations
-    AssembleInstructions(Instructions, UnpackedOpcodes);
+    AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
     // Allocate storage for the actual byte code
     size_t CodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; // sizeof(opcode_unpacked) is an upper bound
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-    size_t CodeWritten = PackCode(Code, UnpackedOpcodes);
+    size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
 #if 0
     // Print the final code (in text)

@@ -18,13 +18,15 @@ struct opcode_unpacked {
 enum addressing_mode {
     REG = 0xC0,
     MEM = 0x00,
+    MODE_NONE = 0xFF,
 };
 
 enum reg {
     EAX = 0x00,
     ECX = 0x01,
     EDX = 0x02,
-    EBX = 0x03
+    EBX = 0x03,
+    R_NONE = 0xF0,
 };
 
 enum op {
@@ -38,9 +40,7 @@ enum op {
     CMP,      // MR, I8, I32
 
     MOV,      // MR, I8, I32
-};
 
-enum jop {
     JMP = 0, JNC, JE, JNE, JL, JG
 };
 
@@ -77,8 +77,11 @@ struct instruction {
     reg Dest;
     reg Src;
     bool Int32;
-    uint32_t imm;
+    uint32_t Imm;
     instruction *JumpDest;
+
+    instruction(addressing_mode Mode, op Op, op_type Type, reg Dest, reg Src, bool Int32, uint32_t Imm)
+        : Mode(Mode), Op(Op), Type(Type), Dest(Dest), Src(Src), Int32(Int32), Imm(Imm), JumpDest(0) {}
 };
 
 const uint8_t Op_MemReg[] =
@@ -99,7 +102,7 @@ const uint8_t Op_Extra[] =
 const uint8_t  Op_Jmp8[] =  {   0xEB,   0x73,   0x74,   0x75,   0x7C,   0x7F};
 const uint16_t Op_Jmp16[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
 
-opcode_unpacked OpJump8(jop Op, int8_t Offs) {
+opcode_unpacked OpJump8(op Op, int8_t Offs) {
     opcode_unpacked Result = {};
 
     Result.Opcode[0] = Op_Jmp8[Op];
@@ -110,7 +113,7 @@ opcode_unpacked OpJump8(jop Op, int8_t Offs) {
     return Result;
 }
 
-opcode_unpacked OpJump32(jop Op, int32_t Offs) {
+opcode_unpacked OpJump32(op Op, int32_t Offs) {
     opcode_unpacked Result = {};
 
     uint16_t Code = Op_Jmp16[Op];
@@ -291,16 +294,18 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
     return Dest;
 }
 
-#define J8(op, offs) Code = (WriteOpcode(OpJump8((op), (offs)), Code))
-#define J32(op, offs) Code = (WriteOpcode(OpJump32((op), (offs)), Code))
+// TODO Figure out what the actual max is, I think it's 6
+#define MAX_OPCODE_LEN 10
 
-#define INC8(mode, reg) Code = (WriteOpcode(OpReg(INC, (mode), (reg), false), Code))
-#define INC32(mode, reg) Code = (WriteOpcode(OpReg(INC, (mode), (reg), true), Code))
+#define INC8(mode, reg) (*(Instructions++) = instruction((mode), INC, ONE_REG, (reg), R_NONE, false, 0))
+#define INC32(mode, reg) (*(Instructions++) = instruction((mode), INC, ONE_REG, (reg), R_NONE, true, 0))
 
-#define RR8(op, mode, dest, src) Code = (WriteOpcode(OpRegReg((op), (mode), (dest), (src), false), Code))
-#define RR32(op, mode, dest, src) Code = (WriteOpcode(OpRegReg((op), (mode), (dest), (src), true), Code))
+#define RR8(op, mode, dest, src) (*(Instructions++) = instruction((mode), (op), TWO_REG, (dest), (src), false, 0))
+#define RR32(op, mode, dest, src) (*(Instructions++) = instruction((mode), (op), TWO_REG, (dest), (src), true, 0))
 
-#define RI8(op, mode, dest, imm) Code = (WriteOpcode(OpRegI8((op), (mode), (dest), (imm)), Code))
-#define RI32(op, mode, dest, imm) Code = (WriteOpcode(OpRegI32((op), (mode), (dest), (imm)), Code))
+#define RI8(op, mode, dest, imm) (*(Instructions++) = instruction((mode), (op), REG_IMM, (dest), R_NONE, false, (imm)))
+#define RI32(op, mode, dest, imm) (*(Instructions++) = instruction((mode), (op), REG_IMM, (dest), R_NONE, true, (imm)))
+
+#define J(op) Instructions; (*(Instructions++) = instruction(MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0))
 
 #endif
