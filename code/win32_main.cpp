@@ -17,24 +17,27 @@
  * any abstraction systems. Once I see the code that needs to be executed, I
  * will design an appropriate system.
  *
- * Also in persuit of this goal, I am attempting to avoid abstractions other
+ * Also in pursuit of this goal, I am attempting to avoid abstractions other
  * people have created. Although I will obviously require established
  * abstractions for outputting information for users and for CPUs. Finally, this
- * program also must acknoledge the fact that it runs on a real machine with
+ * program also must acknowledge the fact that it runs on a real machine with
  * limited memory and inside an operating system which manages access to that
  * memory.
  */
 
-#include <stdint.h>
-
-// TODO: Linux version
-#include <windows.h>
+#include <stdint.h> // int32_t etc
+#include <stdarg.h> // varargs defines
 
 #define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #include "parser.cpp"
 #include "x86_codegen.cpp"
+
+// TODO: Linux version
+#include <windows.h>
+
+HANDLE Out;
 
 // Write an integer to a string in the specified base (not using CRT)
 size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
@@ -65,7 +68,6 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
     return CharCount;
 }
 
-#include <stdarg.h> // varargs defines
 // A printf clone with less features (not using CRT)
 void Print(HANDLE Out, const char *FormatString, ...) {
     va_list args;
@@ -119,29 +121,11 @@ void Print(HANDLE Out, const char *FormatString, ...) {
     va_end(args);
 }
 
-void PrintNFA(HANDLE Out, nfa *NFA) {
-    Print(Out, "Number of states: %u\n", NFA->NumStates);
-
-    for (size_t ArcListIdx = 0; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
-        nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
-
-        Print(Out, "Label: %u, %c, %c\n",
-              ArcList->Label.Type, ArcList->Label.A, ArcList->Label.B);
-
-        for (size_t TransitionIdx = 0;
-             TransitionIdx < ArcList->TransitionCount;
-             ++TransitionIdx)
-        {
-            nfa_transition *Transition = &ArcList->Transitions[TransitionIdx];
-
-            Print(Out, "\t%u => %u\n", Transition->From, Transition->To);
-        }
-    }
-}
+#include "printers.cpp"
 
 int main() {
     // Get the file handle for the output stream
-    HANDLE Out = GetStdHandle(STD_OUTPUT_HANDLE);
+    Out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (!Out || Out == INVALID_HANDLE_VALUE) {
         // we can't print the message, so do a message box (plus boxes are fun)
         MessageBox(0, "Could not get print to standard output", 0, MB_OK | MB_ICONERROR);
@@ -181,6 +165,10 @@ int main() {
         return 1;
     }
 
+    Print(Out, "------------------- Regex --------------------\n\n");
+    Print(Out, Regex);
+    Print(Out, "\n");
+
     // Allocate storage for and then run each stage of the compiler in order
     // TODO: build an allocator for the stages to use with flexible storage
 
@@ -196,7 +184,9 @@ int main() {
 
     // Convert regex to NFA
     ReParse(Regex, NFA);
-    PrintNFA(Out, NFA);
+
+    Print(Out, "\n-------------------- NFA ---------------------\n\n");
+    PrintNFA(NFA);
 
     // Note: this is all x86-specific after this point
     // TODO: ARM support
@@ -212,6 +202,9 @@ int main() {
     // Convert the NFA into an intermediate code representation
     size_t InstructionsGenerated = GenerateInstructions(NFA, Instructions);
 
+    Print(Out, "\n---------------- Instructions ----------------\n\n");
+    PrintInstructions(Instructions, InstructionsGenerated);
+
     // Allocate storage for the unpacked x86 opcodes
     size_t UnpackedOpcodesSize = sizeof(opcode_unpacked) * InstructionsGenerated;
     opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*) VirtualAlloc(0, UnpackedOpcodesSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -224,34 +217,17 @@ int main() {
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
+    Print(Out, "\n------------------ Opcodes -------------------\n\n");
+    PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
+
     // Allocate storage for the actual byte code
     size_t CodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; // sizeof(opcode_unpacked) is an upper bound
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
-#if 0
-    // Print the final code (in text)
-    WriteConsoleA(Out, Code, CodeWritten, &CharsWritten, 0);
-#else
-    // Print the final code (in hex)
-    Print(Out, "\n");
-    DWORD CharsWritten;
-    for (int i = 0; i < CodeWritten; ++i) {
-        char IntStr[5];
-        size_t IntStrCount;
-        if (Code[i] < 0x10) {
-            IntStr[0] = '0';
-            IntStrCount = WriteInt(Code[i], IntStr+1) + 1;
-        } else {
-            IntStrCount = WriteInt(Code[i], IntStr);
-        }
-
-        IntStr[IntStrCount] = ' ';
-
-        WriteConsoleA(Out, IntStr, (DWORD) IntStrCount+1, &CharsWritten, 0);
-    }
-#endif
+    Print(Out, "\n-------------------- Code --------------------\n\n");
+    PrintByteCode(Code, CodeWritten);
 
     return 0;
 }

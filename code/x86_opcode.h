@@ -21,12 +21,18 @@ enum addressing_mode {
     MODE_NONE = 0xFF,
 };
 
+// no strings, it doesn't work with indexes because REG == 0xC0
+
 enum reg {
     EAX = 0x00,
     ECX = 0x01,
     EDX = 0x02,
     EBX = 0x03,
     R_NONE = 0xF0,
+};
+
+const char *reg_strings[] = {
+    "$EAX", "$ECX", "$EDX", "$EBX"
 };
 
 enum op {
@@ -42,6 +48,14 @@ enum op {
     MOV,      // MR, I8, I32
 
     JMP = 0, JNC, JE, JNE, JL, JG
+};
+
+const char *op_strings[] = {
+    "AND", "OR ", "XOR",
+    "INC",
+    "BT ", "CMP",
+    "MOV",
+    "JMP", "JNC", "JE ", "JNE", "JL ", "JG "
 };
 
 enum op_type {
