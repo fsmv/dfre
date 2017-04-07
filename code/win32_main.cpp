@@ -123,6 +123,72 @@ void Print(HANDLE Out, const char *FormatString, ...) {
 
 #include "printers.cpp"
 
+size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
+    va_list args;
+    va_start(args, NumExpecting);
+    char **Arg;
+
+    size_t Count = 0;
+    // Program name
+    char *Curr = CommandLine;
+    if (*Curr == '"') { // Quoted program name
+        Curr += 1;
+        for (; *Curr; ++Curr) {
+            if (*Curr == '"') {
+                Curr += 1;
+                break;
+            }
+        }
+    } else { // Not quoted
+        for (; *Curr; ++Curr) {
+            if (*Curr == ' ' && *(Curr - 1) != '\\') {
+                break;
+            }
+        }
+    }
+    if (*Curr == '\0') {
+        goto ParseArgs_ret;
+    }
+    *Curr++ = '\0';
+    // Skip any extra spaces
+    for (; *Curr && *Curr == ' '; ++Curr)
+        ;
+
+    // Arguments
+    while (*Curr) {
+        if (Count < NumExpecting) {
+            Arg = va_arg(args, char**);
+            *Arg = Curr;
+        }
+        Count += 1;
+        // Find the end of the arg
+        for (; *Curr; ++Curr) {
+            if (*Curr == ' ' && *(Curr - 1) != '\\') {
+                break;
+            }
+        }
+        if (*Curr == ' ') {
+            *Curr++ = '\0';
+            // Skip any extra spaces
+            for (; *Curr && *Curr == ' '; ++Curr)
+                ;
+        }
+    }
+
+ParseArgs_ret:
+    // Set any unfilled args to 0
+    for (size_t Idx = Count; Idx < NumExpecting; ++Idx) {
+        Arg = va_arg(args, char**);
+        *Arg = 0;
+    }
+    va_end(args);
+    return Count;
+}
+
+bool RunCode(uint8_t *Code, size_t CodeWritten, char *Word) {
+    return false;
+}
+
 int main() {
     // Get the file handle for the output stream
     Out = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -132,36 +198,13 @@ int main() {
         return 1;
     }
 
-    // Parse the command line
     char *CommandLine = GetCommandLineA();
     char *ProgName = CommandLine;
-    // Find the arguments
-    char *Regex = CommandLine + 1;
-    for (; *Regex; ++Regex) {
-        if (*Regex == ' ' && *(Regex - 1) != '\\') {
-            break;
-        }
-    }
-    if (*Regex) { // found a space
-        // fill the space between the args and progname for printing progname
-        *Regex = '\0';
-        Regex += 1;
-
-        // Skip any extra spaces
-        for (; *Regex && *Regex == ' '; ++Regex)
-            ;
-
-        if (!(*Regex)) { // There were spaces, but no argument
-            Regex = 0;
-        }
-
-        // otherwise Regex now points to the argument
-    } else { // no arguments
-        Regex = 0;
-    }
+    char *Regex, *Word;
+    ParseArgs(CommandLine, 2, &Regex, &Word);
 
     if (!Regex) { // if we didn't find an argument
-        Print(Out, "Usage: %s [regex]\n", ProgName);
+        Print(Out, "Usage: %s [regex] [search string (optional)]\n", ProgName);
         return 1;
     }
 
@@ -225,6 +268,18 @@ int main() {
 
     Print(Out, "\n-------------------- Code --------------------\n\n");
     PrintByteCode(Code, CodeWritten);
+
+    if (Word) {
+        bool IsMatch = RunCode(Code, CodeWritten, Word);
+
+        Print(Out, "\n\n------------------- Result -------------------\n\n");
+        Print(Out, "Search Word: %s\n", Word);
+        if (IsMatch) {
+            Print(Out, "MATCH\n");
+        }else{
+            Print(Out, "NO MATCH\n");
+        }
+    }
 
     return 0;
 }
