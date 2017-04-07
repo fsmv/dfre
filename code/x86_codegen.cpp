@@ -189,27 +189,24 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
 }
 
 int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size_t JumpDestIdx) {
-    size_t MinIdx = JumpIdx;
-    size_t MaxIdx = JumpDestIdx;
-    if (MinIdx > MaxIdx) {
-        size_t Temp = MinIdx;
-        MinIdx = MaxIdx;
-        MaxIdx = Temp;
-    } else {
-        MinIdx += 1; // if it's a forward jump, don't count the actual jump instruction
+    size_t Start = 0, End = 0;
+    if (JumpDestIdx < JumpIdx) { // backwards
+        Start = JumpDestIdx;
+        End = JumpIdx + 1;
+    } else { // forwards (or equal)
+        Start = JumpIdx + 1;
+        End = JumpDestIdx;
     }
 
     size_t JumpOffset = 0;
-    for (size_t Idx = MinIdx; Idx < MaxIdx; ++Idx) {
+    for (size_t Idx = Start; Idx < End; ++Idx) {
         JumpOffset += SizeOpcode(UnpackedOpcodes[Idx]);
     }
 
     int32_t Result = (int32_t) JumpOffset;
-
-    if (JumpDestIdx < JumpIdx) {
+    if (JumpDestIdx < JumpIdx) { // backwards
         Result *= -1;
     }
-
     return Result;
 }
 
