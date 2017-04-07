@@ -55,6 +55,9 @@ const char *op_strings[] = {
     "INC",
     "BT ", "CMP",
     "MOV",
+};
+
+const char *jmp_strings[] = {
     "JMP", "JNC", "JE ", "JNE", "JL ", "JG "
 };
 

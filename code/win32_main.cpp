@@ -217,9 +217,6 @@ int main() {
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
-    Print(Out, "\n------------------ Opcodes -------------------\n\n");
-    PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
-
     // Allocate storage for the actual byte code
     size_t CodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; // sizeof(opcode_unpacked) is an upper bound
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);

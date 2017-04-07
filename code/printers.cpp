@@ -67,7 +67,11 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
         Print(Out, Separator);
 
         // Op
-        Print(Out, op_strings[Instruction->Op]);
+        if (Instruction->Type == JUMP) {
+            Print(Out, jmp_strings[Instruction->Op]);
+        } else {
+            Print(Out, op_strings[Instruction->Op]);
+        }
 
         Print(Out, Separator);
 
@@ -112,10 +116,6 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
 
         Print(Out, "\n");
     }
-}
-
-void PrintUnpackedOpcodes(opcode_unpacked *UnpackedOpcodes, size_t NumOpcodes) {
-    // TODO
 }
 
 void PrintByteCode(uint8_t *Code, size_t Size) {
