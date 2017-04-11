@@ -31,10 +31,10 @@ instruction *
 GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
                              instruction *Instructions)
 {
-    RI8(BT, MEM, EBX, (uint8_t) DisableState);
+    RI8(BT, REG, EBX, (uint8_t) (DisableState - 1));
     instruction *Jump = J(JNC);
 
-    uint32_t DisableMask = (1 << DisableState) ^ -1;
+    uint32_t DisableMask = (1 << (DisableState - 1)) ^ -1;
     RI32(AND, REG, EDX, DisableMask); // 2 + 4 bytes
 
     RI32(OR, REG, ECX, ActivateMask); // 2 + 4 bytes
@@ -76,9 +76,8 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
         Instructions = GenInstructionsTransitionSet(DisableState, ActivateMask, Instructions);
     }
 
-    // TODO: these might need to be changed to REG. Text said MEM bits does REG
-    RR32(AND, MEM, EBX, EDX);
-    RR32(OR, MEM, EBX, ECX);
+    RR32(AND, REG, EBX, EDX);
+    RR32(OR, REG, EBX, ECX);
 
     return Instructions;
 }
@@ -93,9 +92,9 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
 size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     instruction *InstructionsStart = Instructions;
 
-    instruction *CheckCharLoc = Instructions;
+    RI32(MOV, REG, EBX, 1);
 
-    RR32(XOR, REG, EBX, EBX);
+    instruction *CheckCharLoc = Instructions;
 
     // Epsilon arcs, garunteed to be the first arc list
     nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
@@ -185,6 +184,9 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     instruction *JmpToCheckChar = J(JNE);
     JmpToCheckChar->JumpDest = CheckCharLoc;
 
+    RI32(AND, REG, EBX, (1 >> NFA->NumStates));
+    RET;
+
     return Instructions - InstructionsStart;
 }
 
@@ -240,6 +242,9 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
                 } else {
                     *(NextOpcode++) = OpRegI8(Instr->Op, Instr->Mode, Instr->Dest, (uint8_t) Instr->Imm);
                 }
+                break;
+            case NOARG:
+                *(NextOpcode++) = OpNoarg(Instr->Op);
                 break;
         }
     }

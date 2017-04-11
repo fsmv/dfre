@@ -47,6 +47,8 @@ enum op {
 
     MOV,      // MR, I8, I32
 
+    RET,
+
     JMP = 0, JNC, JE, JNE, JL, JG
 };
 
@@ -55,6 +57,7 @@ const char *op_strings[] = {
     "INC",
     "BT ", "CMP",
     "MOV",
+    "RET",
 };
 
 const char *jmp_strings[] = {
@@ -65,7 +68,8 @@ enum op_type {
     JUMP,
     ONE_REG,
     TWO_REG,
-    REG_IMM
+    REG_IMM,
+    NOARG,
 };
 
 /*
@@ -105,17 +109,20 @@ const uint8_t Op_MemReg[] =
 { 0x20, 0x08, 0x30,
   0xFE,
   0x00, 0x38,
-  0x88};
+  0x88,
+  0xC3};
 const uint16_t Op_Imm[] =
 { 0x0080, 0x0080, 0x0080,
   0x0000,
   0x0FBA, 0x0080,
-  0x00C6 };
+  0x00C6,
+  0x0000,};
 const uint8_t Op_Extra[] = 
 { 0x04, 0x01, 0x06,
   0x00,
   0x04, 0x07,
-  0x00 };
+  0x00,
+  0x00};
 const uint8_t  Op_Jmp8[] =  {   0xEB,   0x73,   0x74,   0x75,   0x7C,   0x7F};
 const uint16_t Op_Jmp16[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
 
@@ -151,6 +158,16 @@ opcode_unpacked OpJump32(op Op, int32_t Offs) {
 
     Result.HasModRM = false;
     Result.ImmCount = 4;
+
+    return Result;
+}
+
+opcode_unpacked OpNoarg(op Op) {
+    Assert(Op == RET);
+
+    opcode_unpacked Result = {};
+    Result.Opcode[0] = Op_MemReg[Op];
+    Result.HasModRM = false;
 
     return Result;
 }
@@ -304,7 +321,7 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
 
     Dest = WriteNullTerm(Opcode.Displacement, Dest);
 
-    for (int ImmIdx = 0; ImmIdx < Opcode.ImmCount; ++ImmIdx) {
+    for (size_t ImmIdx = 0; ImmIdx < Opcode.ImmCount; ++ImmIdx) {
         *Dest++ = Opcode.Immediate[ImmIdx];
     }
 
@@ -324,5 +341,7 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
 #define RI32(op, mode, dest, imm) (*(Instructions++) = instruction((mode), (op), REG_IMM, (dest), R_NONE, true, (imm)))
 
 #define J(op) Instructions; (*(Instructions++) = instruction(MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0))
+
+#define RET (*(Instructions++) = instruction(MODE_NONE, RET, NOARG, R_NONE, R_NONE, false, 0))
 
 #endif
