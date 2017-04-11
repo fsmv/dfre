@@ -29,8 +29,8 @@ token ReLexerNext(lexer_state *State) {
 
     // TODO: add {m}, {m, n}, [], character classes
 
-    bool NonSpecial = false;
-    do {
+    bool Special = false;
+    while(!Special) {
         switch (*State->Pos) {
             case '.': 
             case '*':
@@ -46,7 +46,7 @@ token ReLexerNext(lexer_state *State) {
                     State->Pos += 1;
                 }
 
-                NonSpecial = false;
+                Special = true;
             } break;
 
             case '\\': {
@@ -62,7 +62,7 @@ token ReLexerNext(lexer_state *State) {
                     State->Pos += 2;
                 }
 
-                NonSpecial = true;
+                Special = false;
             } break;
 
             default: {
@@ -72,14 +72,14 @@ token ReLexerNext(lexer_state *State) {
 
                 Result.Length += 1;
                 State->Pos += 1;
-                NonSpecial = true;
+                Special = false;
             } break;
 
             case '\0': {
-                NonSpecial = false;
+                Special = true;
             } break;
         };
-    } while (NonSpecial);
+    };
 
     return Result;
 }
