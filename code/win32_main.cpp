@@ -185,8 +185,25 @@ ParseArgs_ret:
     return Count;
 }
 
-bool RunCode(uint8_t *Code, size_t CodeWritten, char *Word) {
-    return false;
+void *LoadCode(uint8_t *Code, size_t CodeWritten) {
+    void *CodeExe = VirtualAlloc(0, CodeWritten, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    uint8_t *CodeDest = (uint8_t*) CodeExe;
+    for (size_t i = 0; i < CodeWritten; ++i) {
+        *CodeDest++ = Code[i];
+    }
+    VirtualProtect(CodeExe, CodeWritten, PAGE_EXECUTE_READ, 0);
+    return CodeExe;
+}
+
+bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
+    void *CodeLoc = LoadCode(Code, CodeWritten);
+    uint32_t IsMatch = 0;
+    __asm {
+        mov eax, WordPtr
+        call CodeLoc
+        mov IsMatch, ebx
+    }
+    return (IsMatch != 0);
 }
 
 int main() {
