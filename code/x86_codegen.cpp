@@ -29,16 +29,10 @@ void NFASortArcList(nfa_arc_list *ArcList) {
 
 instruction *
 GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
-                             bool Disable,
                              instruction *Instructions)
 {
     RI8(BT, REG, EBX, (uint8_t) DisableState); // Check if DisableState is active
     instruction *Jump = J(JNC); // skip the following if it's not active
-
-    if (Disable) {
-        uint32_t DisableMask = ~(1 << DisableState);
-        RI32(AND, REG, EDX, DisableMask); // Remember to disable the DisableState
-    }
 
     RI32(OR, REG, ECX, ActivateMask); // Remember to activate the activate states
 
@@ -49,9 +43,6 @@ GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
 
 instruction *
 GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
-    // Epsilon doesn't disable any states
-    bool Disable = (ArcList->Label.Type != EPSILON);
-
     NFASortArcList(ArcList);
 
     uint32_t DisableState = (uint32_t) -1;
@@ -66,7 +57,7 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
         if (Arc->From != DisableState) {
             if (DisableState != -1) {
                 Instructions = GenInstructionsTransitionSet(
-                        DisableState, ActivateMask, Disable, Instructions);
+                        DisableState, ActivateMask, Instructions);
             }
 
             ActivateMask = (1 << Arc->To);
@@ -78,7 +69,7 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
 
     if (DisableState != -1) {
         Instructions = GenInstructionsTransitionSet(
-                DisableState, ActivateMask, Disable, Instructions);
+                DisableState, ActivateMask, Instructions);
     }
 
     return Instructions;
@@ -96,22 +87,13 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
 
     RI32(MOV, REG, EBX, 1); // Set state 0 as active
 
-    instruction *CheckCharLoc = Instructions;
+    instruction *Top = Instructions;
+    RI8(CMP, MEM, EAX, 0); // If we're at the end, stop
+    instruction *JmpToEnd = J(JE);
 
-    // Epsilon arcs, garunteed to be the first arc list
-    // Loop following epsilon arcs until following doesn't activate any new states
-    nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
-    Assert(EpsilonArcs->Label.Type == EPSILON);
     RR32(XOR, REG, ECX, ECX); // Clear states to enable
     RR32(MOV, REG, EDX, EBX); // Save current active states list
-    Instructions = GenInstructionsArcList(EpsilonArcs, Instructions);
-    RR32(OR, REG, EBX, ECX);  // Enable the states to enable
-    RR32(CMP, REG, EDX, EBX); // Check if active states has changed
-    instruction *ContinueEpsilon = J(JNE);
-    ContinueEpsilon->JumpDest = CheckCharLoc;
-
-    RR32(XOR, REG, ECX, ECX); // Clear states to enable
-    RI32(MOV, REG, EDX, 0xFFFFFFFF); // Clear states to disable
+    R32(NOT, REG, EDX); // Remember to disable any currently active state
 
     // Dot arcs, garunteed to be the second arc list
     nfa_arc_list *DotArcs = NFAGetArcList(NFA, 1);
@@ -195,11 +177,24 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     RR32(AND, REG, EBX, EDX); // Disabled the states to disable
     RR32(OR, REG, EBX, ECX);  // Enable the states to enable
 
-    INC32(REG, EAX); // Next char in string
-    RI8(CMP, MEM, EAX, 0); // If we're not at the end repeat
-    instruction *JmpToCheckChar = J(JNE);
-    JmpToCheckChar->JumpDest = CheckCharLoc;
+    // Epsilon arcs, garunteed to be the first arc list
+    // Loop following epsilon arcs until following doesn't activate any new states
+    instruction *EpsilonLoopStart = Instructions;
+    nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
+    Assert(EpsilonArcs->Label.Type == EPSILON);
+    RR32(XOR, REG, ECX, ECX); // Clear states to enable
+    RR32(MOV, REG, EDX, EBX); // Save current active states list
+    Instructions = GenInstructionsArcList(EpsilonArcs, Instructions);
+    RR32(OR, REG, EBX, ECX);  // Enable the states to enable
+    RR32(CMP, REG, EDX, EBX); // Check if active states has changed
+    instruction *ContinueEpsilon = J(JNE);
+    ContinueEpsilon->JumpDest = EpsilonLoopStart;
 
+    R32(INC, REG, EAX); // Next char in string
+    instruction *JmpToTop = J(JMP);
+    JmpToTop->JumpDest = Top;
+
+    JmpToEnd->JumpDest = Instructions;
     // Return != 0 if accept state was active, 0 otherwise
     RI32(AND, REG, EBX, (1 << (NFA->NumStates - 1)));
     RET;

@@ -41,6 +41,7 @@ enum op {
     XOR,      // MR, I8, I32
 
     INC,      // MR
+    NOT,      // MR
 
     BT,       // I8
     CMP,      // MR, I8, I32
@@ -54,7 +55,7 @@ enum op {
 
 const char *op_strings[] = {
     "AND", "OR ", "XOR",
-    "INC",
+    "INC", "NOT",
     "BT ", "CMP",
     "MOV",
     "RET",
@@ -107,19 +108,19 @@ struct instruction {
 
 const uint8_t Op_MemReg[] =
 { 0x20, 0x08, 0x30,
-  0xFE,
+  0xFE, 0xF6,
   0x00, 0x38,
   0x88,
   0xC3};
 const uint16_t Op_Imm[] =
 { 0x0080, 0x0080, 0x0080,
-  0x0000,
+  0x0000, 0x0000,
   0x0FBA, 0x0080,
   0x00C6,
   0x0000,};
 const uint8_t Op_Extra[] = 
 { 0x04, 0x01, 0x06,
-  0x00,
+  0x00, 0x02,
   0x04, 0x07,
   0x00,
   0x00};
@@ -173,13 +174,14 @@ opcode_unpacked OpNoarg(op Op) {
 }
 
 opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, bool is16) {
-    Assert(Op == INC);
+    Assert(Op == INC || Op == NOT);
 
     opcode_unpacked Result = {};
 
     Result.Opcode[0] = Op_MemReg[Op] + (is16 ? 1 : 0);
 
     Result.ModRM |= Mode;
+    Result.ModRM |= (Op_Extra[Op] & 0x07) << 3;
     Result.ModRM |= Reg;
 
     Result.HasModRM = true;
@@ -331,8 +333,8 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
 // TODO Figure out what the actual max is, I think it's 6
 #define MAX_OPCODE_LEN 10
 
-#define INC8(mode, reg) (*(Instructions++) = instruction((mode), INC, ONE_REG, (reg), R_NONE, false, 0))
-#define INC32(mode, reg) (*(Instructions++) = instruction((mode), INC, ONE_REG, (reg), R_NONE, true, 0))
+#define R8(op, mode, reg) (*(Instructions++) = instruction((mode), (op), ONE_REG, (reg), R_NONE, false, 0))
+#define R32(op, mode, reg) (*(Instructions++) = instruction((mode), (op), ONE_REG, (reg), R_NONE, true, 0))
 
 #define RR8(op, mode, dest, src) (*(Instructions++) = instruction((mode), (op), TWO_REG, (dest), (src), false, 0))
 #define RR32(op, mode, dest, src) (*(Instructions++) = instruction((mode), (op), TWO_REG, (dest), (src), true, 0))
