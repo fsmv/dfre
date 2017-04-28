@@ -199,6 +199,11 @@ bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
     void *CodeLoc = LoadCode(Code, CodeWritten);
     uint32_t IsMatch = 0;
     __asm {
+        // Use the registers used in the code so the compiler knows we use them
+        xor ebx, ebx
+        xor ecx, ecx
+        xor edx, edx
+
         mov eax, WordPtr
         call CodeLoc
         mov IsMatch, ebx
