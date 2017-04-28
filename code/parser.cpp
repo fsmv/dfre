@@ -97,11 +97,13 @@ void ReParse(char *regex, nfa *NFA) {
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
-
                 nfa_transition Transition = {};
+
                 Transition.From = NFA->NumStates - 1;
                 Transition.To = LoopBackState;
-
+                NFAAddArc(NFA, Label, Transition);
+                // Must not end on a state with out transitions
+                Transition.To = NFA->NumStates++;
                 NFAAddArc(NFA, Label, Transition);
 
                 LoopBackState = NULLSTATE;
