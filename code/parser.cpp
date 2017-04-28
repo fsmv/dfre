@@ -36,6 +36,8 @@ void ReParse(char *regex, nfa *NFA) {
     NFA->NumStates = 1;
 
     uint32_t LoopBackState = NULLSTATE;
+    uint32_t ParenLoopBackStates[16];
+    size_t NumOpenParens = 0;
 
     // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
     nfa_label EpsilonLabel = {};
@@ -54,7 +56,7 @@ void ReParse(char *regex, nfa *NFA) {
         switch(*Token.Str) {
             case '.': {
                 LoopBackState = NFA->NumStates - 1;
-                int MyState = NFA->NumStates++;
+                uint32_t MyState = NFA->NumStates++;
 
                 nfa_label Label = {};
                 Label.Type = DOT;
@@ -66,6 +68,7 @@ void ReParse(char *regex, nfa *NFA) {
                 NFAAddArc(NFA, Label, Transition);
             } break;
             case '*': {
+                // TODO: Report error
                 Assert(LoopBackState != NULLSTATE);
 
                 nfa_label Label = {};
@@ -77,7 +80,7 @@ void ReParse(char *regex, nfa *NFA) {
 
                 NFAAddArc(NFA, Label, Transition);
 
-                int MyState = NFA->NumStates++;
+                uint32_t MyState = NFA->NumStates++;
                 Transition.To = MyState; // last accept => new accept
 
                 NFAAddArc(NFA, Label, Transition);
@@ -89,6 +92,7 @@ void ReParse(char *regex, nfa *NFA) {
                 LoopBackState = NULLSTATE;
             } break;
             case '+': {
+                // TODO: Report error
                 Assert(LoopBackState != NULLSTATE);
 
                 nfa_label Label = {};
@@ -103,10 +107,11 @@ void ReParse(char *regex, nfa *NFA) {
                 LoopBackState = NULLSTATE;
             } break;
             case '?': {
+                // TODO: Report error
                 Assert(LoopBackState != NULLSTATE);
 
-                int LastAccept = NFA->NumStates - 1;
-                int NewAccept = NFA->NumStates++;
+                uint32_t LastAccept = NFA->NumStates - 1;
+                uint32_t NewAccept = NFA->NumStates++;
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
@@ -123,13 +128,20 @@ void ReParse(char *regex, nfa *NFA) {
 
                 LoopBackState = NULLSTATE;
             } break;
+            case '(': {
+                Assert(NumOpenParens < ArrayLength(ParenLoopBackStates));
 
-            //TODO: Impliment these:
-            case '(':
-            case ')':
+                ParenLoopBackStates[NumOpenParens++] = NFA->NumStates - 1;
+            } break;
+            case ')': {
+                // TODO: Report error
+                Assert(NumOpenParens > 0);
+
+                uint32_t OpenParenState = ParenLoopBackStates[--NumOpenParens];
+                LoopBackState = OpenParenState;
+            } break;
             case '|': {
             } break;
-
             case '\\':
             default: {
                 nfa_label Label = {};
