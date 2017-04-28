@@ -85,9 +85,23 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
 size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     instruction *InstructionsStart = Instructions;
 
-    RI32(MOV, REG, EBX, 1); // Set state 0 as active
+    RI32(MOV, REG, EBX, 1 << NFA_STARTSTATE); // Set state 0 as active
 
     instruction *Top = Instructions;
+
+    // Loop following epsilon arcs until following doesn't activate any new states
+    instruction *EpsilonLoopStart = Instructions;
+    // Epsilon arcs, garunteed to be the first arc list
+    nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
+    Assert(EpsilonArcs->Label.Type == EPSILON);
+    RR32(XOR, REG, ECX, ECX); // Clear states to enable
+    RR32(MOV, REG, EDX, EBX); // Save current active states list
+    Instructions = GenInstructionsArcList(EpsilonArcs, Instructions);
+    RR32(OR, REG, EBX, ECX);  // Enable the states to enable
+    RR32(CMP, REG, EDX, EBX); // Check if active states has changed
+    instruction *ContinueEpsilon = J(JNE);
+    ContinueEpsilon->JumpDest = EpsilonLoopStart;
+
     RI8(CMP, MEM, EAX, 0); // If we're at the end, stop
     instruction *JmpToEnd = J(JE);
 
@@ -177,26 +191,13 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     RR32(AND, REG, EBX, EDX); // Disabled the states to disable
     RR32(OR, REG, EBX, ECX);  // Enable the states to enable
 
-    // Epsilon arcs, garunteed to be the first arc list
-    // Loop following epsilon arcs until following doesn't activate any new states
-    instruction *EpsilonLoopStart = Instructions;
-    nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
-    Assert(EpsilonArcs->Label.Type == EPSILON);
-    RR32(XOR, REG, ECX, ECX); // Clear states to enable
-    RR32(MOV, REG, EDX, EBX); // Save current active states list
-    Instructions = GenInstructionsArcList(EpsilonArcs, Instructions);
-    RR32(OR, REG, EBX, ECX);  // Enable the states to enable
-    RR32(CMP, REG, EDX, EBX); // Check if active states has changed
-    instruction *ContinueEpsilon = J(JNE);
-    ContinueEpsilon->JumpDest = EpsilonLoopStart;
-
     R32(INC, REG, EAX); // Next char in string
     instruction *JmpToTop = J(JMP);
     JmpToTop->JumpDest = Top;
 
     JmpToEnd->JumpDest = Instructions;
     // Return != 0 if accept state was active, 0 otherwise
-    RI32(AND, REG, EBX, (1 << (NFA->NumStates - 1)));
+    RI32(AND, REG, EBX, 1 << NFA_ACCEPTSTATE);
     RET;
 
     return Instructions - InstructionsStart;

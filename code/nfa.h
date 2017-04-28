@@ -123,4 +123,7 @@ inline nfa_arc_list *NFAGetArcList(nfa *NFA, size_t Idx) {
     return (nfa_arc_list *) Result;
 }
 
+#define NFA_STARTSTATE  ((uint32_t) 1)
+#define NFA_ACCEPTSTATE ((uint32_t) 0)
+
 #endif

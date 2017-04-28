@@ -30,13 +30,20 @@ void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
     *TransitionLocation = Transition;
 }
 
+
+struct ParenInfo {
+    uint32_t LoopBackState;
+    uint32_t AcceptState;
+};
+
 #define NULLSTATE ((uint32_t) -1)
 
 void ReParse(char *regex, nfa *NFA) {
-    NFA->NumStates = 1;
+    NFA->NumStates = 2; // Reserve 0 for accept, 1 for start
 
+    uint32_t LastState = NFA_STARTSTATE;
     uint32_t LoopBackState = NULLSTATE;
-    uint32_t ParenLoopBackStates[16];
+    ParenInfo ParenLoopBackStates[16]; // Paren accept state is this - 1
     size_t NumOpenParens = 0;
 
     // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
@@ -55,7 +62,7 @@ void ReParse(char *regex, nfa *NFA) {
 
         switch(*Token.Str) {
             case '.': {
-                LoopBackState = NFA->NumStates - 1;
+                LoopBackState = LastState;
                 uint32_t MyState = NFA->NumStates++;
 
                 nfa_label Label = {};
@@ -66,16 +73,17 @@ void ReParse(char *regex, nfa *NFA) {
                 Transition.To = MyState;
 
                 NFAAddArc(NFA, Label, Transition);
+                LastState = MyState;
             } break;
             case '*': {
-                // TODO: Report error
+                // TODO: Report error, or ignore if nofail
                 Assert(LoopBackState != NULLSTATE);
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
 
                 nfa_transition Transition = {};
-                Transition.From = NFA->NumStates - 1;
+                Transition.From = LastState;
                 Transition.To = LoopBackState;
 
                 NFAAddArc(NFA, Label, Transition);
@@ -90,59 +98,94 @@ void ReParse(char *regex, nfa *NFA) {
                 NFAAddArc(NFA, Label, Transition);
 
                 LoopBackState = NULLSTATE;
+                LastState = MyState;
             } break;
             case '+': {
-                // TODO: Report error
+                // TODO: Report error, or ignore if nofail
                 Assert(LoopBackState != NULLSTATE);
 
+                uint32_t MyState = NFA->NumStates++;
                 nfa_label Label = {};
                 Label.Type = EPSILON;
                 nfa_transition Transition = {};
 
-                Transition.From = NFA->NumStates - 1;
+                Transition.From = LastState;
                 Transition.To = LoopBackState;
                 NFAAddArc(NFA, Label, Transition);
                 // Must not end on a state with out transitions
-                Transition.To = NFA->NumStates++;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
 
                 LoopBackState = NULLSTATE;
+                LastState = MyState;
             } break;
             case '?': {
-                // TODO: Report error
+                // TODO: Report error, or ignore if nofail
                 Assert(LoopBackState != NULLSTATE);
 
-                uint32_t LastAccept = NFA->NumStates - 1;
-                uint32_t NewAccept = NFA->NumStates++;
+                uint32_t MyState = NFA->NumStates++;
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
-
                 nfa_transition Transition = {};
-                Transition.From = LastAccept;
-                Transition.To = NewAccept;
 
+                Transition.From = LastState;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
-
-                Transition.From = LoopBackState; // loop back => new accept
-
+                Transition.From = LoopBackState;
                 NFAAddArc(NFA, Label, Transition);
 
                 LoopBackState = NULLSTATE;
+                LastState = MyState;
             } break;
             case '(': {
                 Assert(NumOpenParens < ArrayLength(ParenLoopBackStates));
 
-                ParenLoopBackStates[NumOpenParens++] = NFA->NumStates - 1;
+                ParenInfo *PInfo = &ParenLoopBackStates[NumOpenParens++];
+                PInfo->LoopBackState = LastState;
+                PInfo->AcceptState = NFA->NumStates++;
             } break;
             case ')': {
-                // TODO: Report error
+                // TODO: Report error, or ignore/count as a literal if nofail
                 Assert(NumOpenParens > 0);
 
-                uint32_t OpenParenState = ParenLoopBackStates[--NumOpenParens];
-                LoopBackState = OpenParenState;
+                ParenInfo *PInfo = &ParenLoopBackStates[--NumOpenParens];
+
+                nfa_label Label = {};
+                Label.Type = EPSILON;
+                nfa_transition Transition = {};
+
+                Transition.From = LastState;
+                Transition.To = PInfo->AcceptState;
+                NFAAddArc(NFA, Label, Transition);
+
+                LoopBackState = PInfo->LoopBackState;
+                LastState = PInfo->AcceptState;
             } break;
             case '|': {
+                size_t NextOrSibling = NFA->NumStates++;
+
+                uint32_t OrGroupStartState = NFA_STARTSTATE;
+                uint32_t OrGroupAcceptState = NFA_ACCEPTSTATE;
+                if (NumOpenParens > 0) {
+                    ParenInfo *PInfo = &ParenLoopBackStates[NumOpenParens - 1];
+                    OrGroupStartState = PInfo->LoopBackState;
+                    OrGroupAcceptState = PInfo->AcceptState;
+                }
+
+                nfa_label Label = {};
+                Label.Type = EPSILON;
+                nfa_transition Transition = {};
+
+                Transition.From = LastState;
+                Transition.To = OrGroupAcceptState;
+                NFAAddArc(NFA, Label, Transition);
+                Transition.From = OrGroupStartState;
+                Transition.To = NextOrSibling;
+                NFAAddArc(NFA, Label, Transition);
+
+                LoopBackState = NULLSTATE;
+                LastState = NextOrSibling;
             } break;
             case '\\':
             default: {
@@ -157,14 +200,21 @@ void ReParse(char *regex, nfa *NFA) {
                     }
                     Label.A = *c;
 
-                    Transition.From = NFA->NumStates - 1;
-                    Transition.To = NFA->NumStates++;
-
+                    uint32_t MyState = NFA->NumStates++;
+                    Transition.From = LastState;
+                    Transition.To = MyState;
                     NFAAddArc(NFA, Label, Transition);
 
                     LoopBackState = Transition.From;
+                    LastState = MyState;
                 }
             } break;
         }
     }
+    nfa_label Label = {};
+    Label.Type = EPSILON;
+    nfa_transition Transition = {};
+    Transition.From = LastState;
+    Transition.To = NFA_ACCEPTSTATE;
+    NFAAddArc(NFA, Label, Transition);
 }
