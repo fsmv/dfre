@@ -248,7 +248,7 @@ int main() {
     }
 
     // Convert regex to NFA
-    ReParse(Regex, NFA);
+    RegexToNFA(Regex, NFA);
 
     Print(Out, "\n-------------------- NFA ---------------------\n\n");
     PrintNFA(NFA);

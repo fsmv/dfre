@@ -30,191 +30,190 @@ void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
     *TransitionLocation = Transition;
 }
 
-
-struct ParenInfo {
-    uint32_t LoopBackState;
-    uint32_t AcceptState;
+struct chunk_bounds {
+    uint32_t StartState;
+    uint32_t EndState;
 };
 
-#define NULLSTATE ((uint32_t) -1)
-
-void ReParse(char *regex, nfa *NFA) {
+void RegexToNFA(char *Regex, nfa *NFA) {
     NFA->NumStates = 2; // Reserve 0 for accept, 1 for start
 
-    uint32_t LastState = NFA_STARTSTATE;
-    uint32_t LoopBackState = NULLSTATE;
-    ParenInfo ParenLoopBackStates[16]; // Paren accept state is this - 1
+    // LastChunk.StartState == NFA_NULLSTATE means the last chunk cannot be looped
+    chunk_bounds LastChunk{NFA_NULLSTATE, NFA_STARTSTATE};
+    chunk_bounds ParenChunks[32];
     size_t NumOpenParens = 0;
 
-    // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
+    // Epsilon is garunteed to be the first arc list for the code-gen step
     nfa_label EpsilonLabel = {};
     EpsilonLabel.Type = EPSILON;
     NFACreateArcList(NFA, EpsilonLabel);
 
-    // NOTE(fsmv): Dot is garunteed to be the second arc list for the code-gen step
+    // Dot is garunteed to be the second arc list for the code-gen step
     nfa_label DotLabel = {};
     DotLabel.Type = DOT;
     NFACreateArcList(NFA, DotLabel);
 
-    lexer_state Lexer = ReLexer(regex);
-    while(ReLexerHasNext(&Lexer)) {
-        token Token = ReLexerNext(&Lexer);
+    lexer_state Lexer{Regex};
+    while(LexHasNext(&Lexer)) {
+        token Token = LexNext(&Lexer);
 
         switch(*Token.Str) {
             case '.': {
-                LoopBackState = LastState;
                 uint32_t MyState = NFA->NumStates++;
 
                 nfa_label Label = {};
                 Label.Type = DOT;
-
                 nfa_transition Transition = {};
-                Transition.From = LoopBackState;
-                Transition.To = MyState;
 
+                Transition.From = LastChunk.EndState;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
-                LastState = MyState;
+
+                LastChunk.StartState = LastChunk.EndState;
+                LastChunk.EndState = MyState;
             } break;
             case '*': {
-                // TODO: Report error, or ignore if nofail
-                Assert(LoopBackState != NULLSTATE);
+                if (LastChunk.StartState == NFA_NULLSTATE) {
+                    // TODO: report warning / error
+                    break;
+                }
+                uint32_t MyState = NFA->NumStates++;
 
+                nfa_transition Transition = {};
                 nfa_label Label = {};
                 Label.Type = EPSILON;
 
-                nfa_transition Transition = {};
-                Transition.From = LastState;
-                Transition.To = LoopBackState;
-
+                Transition.From = LastChunk.EndState;
+                Transition.To = LastChunk.StartState;
                 NFAAddArc(NFA, Label, Transition);
 
-                uint32_t MyState = NFA->NumStates++;
-                Transition.To = MyState; // last accept => new accept
-
+                Transition.From = LastChunk.EndState;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
 
-                Transition.From = LoopBackState; // loop back => new accept
-
+                Transition.From = LastChunk.StartState;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = NULLSTATE;
-                LastState = MyState;
+                LastChunk.StartState = NFA_NULLSTATE;
+                LastChunk.EndState = MyState;
             } break;
             case '+': {
-                // TODO: Report error, or ignore if nofail
-                Assert(LoopBackState != NULLSTATE);
-
+                if (LastChunk.StartState == NFA_NULLSTATE) {
+                    // TODO: report warning / error
+                    break;
+                }
                 uint32_t MyState = NFA->NumStates++;
+
                 nfa_label Label = {};
                 Label.Type = EPSILON;
                 nfa_transition Transition = {};
 
-                Transition.From = LastState;
-                Transition.To = LoopBackState;
+                Transition.From = LastChunk.EndState;
+                Transition.To = LastChunk.StartState;
                 NFAAddArc(NFA, Label, Transition);
-                // Must not end on a state with out transitions
+
+                Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = NULLSTATE;
-                LastState = MyState;
+                LastChunk.StartState = NFA_NULLSTATE;
+                LastChunk.EndState = MyState;
             } break;
             case '?': {
-                // TODO: Report error, or ignore if nofail
-                Assert(LoopBackState != NULLSTATE);
-
+                if (LastChunk.StartState == NFA_NULLSTATE) {
+                    // TODO: report warning / error
+                    break;
+                }
                 uint32_t MyState = NFA->NumStates++;
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
                 nfa_transition Transition = {};
 
-                Transition.From = LastState;
+                Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
-                Transition.From = LoopBackState;
+
+                Transition.From = LastChunk.StartState;
+                Transition.To = MyState;
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = NULLSTATE;
-                LastState = MyState;
+                LastChunk.StartState = NFA_NULLSTATE;
+                LastChunk.EndState = MyState;
             } break;
             case '(': {
-                Assert(NumOpenParens < ArrayLength(ParenLoopBackStates));
+                // TODO: Allocator
+                Assert(NumOpenParens < ArrayLength(ParenChunks));
 
-                ParenInfo *PInfo = &ParenLoopBackStates[NumOpenParens++];
-                PInfo->LoopBackState = LastState;
-                PInfo->AcceptState = NFA->NumStates++;
+                uint32_t MyState = NFA->NumStates++;
+                chunk_bounds *ParenChunk = &ParenChunks[NumOpenParens++];
+                ParenChunk->StartState = LastChunk.EndState;
+                ParenChunk->EndState = MyState;
             } break;
             case ')': {
-                // TODO: Report error, or ignore/count as a literal if nofail
-                Assert(NumOpenParens > 0);
-
-                ParenInfo *PInfo = &ParenLoopBackStates[--NumOpenParens];
+                if (NumOpenParens == 0) {
+                    // TODO: report warning / error
+                    break;
+                }
+                chunk_bounds *MyChunk = &ParenChunks[--NumOpenParens];
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
                 nfa_transition Transition = {};
 
-                Transition.From = LastState;
-                Transition.To = PInfo->AcceptState;
+                Transition.From = LastChunk.EndState;
+                Transition.To = MyChunk->EndState;
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = PInfo->LoopBackState;
-                LastState = PInfo->AcceptState;
+                LastChunk = *MyChunk;
             } break;
             case '|': {
+                // If we see '|', we're at the end of the first or chunk sibling
                 size_t NextOrSibling = NFA->NumStates++;
 
-                uint32_t OrGroupStartState = NFA_STARTSTATE;
-                uint32_t OrGroupAcceptState = NFA_ACCEPTSTATE;
+                chunk_bounds OrChunk{NFA_STARTSTATE, NFA_ACCEPTSTATE};
                 if (NumOpenParens > 0) {
-                    ParenInfo *PInfo = &ParenLoopBackStates[NumOpenParens - 1];
-                    OrGroupStartState = PInfo->LoopBackState;
-                    OrGroupAcceptState = PInfo->AcceptState;
+                    OrChunk = ParenChunks[NumOpenParens - 1];
                 }
 
                 nfa_label Label = {};
                 Label.Type = EPSILON;
                 nfa_transition Transition = {};
 
-                Transition.From = LastState;
-                Transition.To = OrGroupAcceptState;
+                Transition.From = LastChunk.EndState;
+                Transition.To = OrChunk.EndState;
                 NFAAddArc(NFA, Label, Transition);
-                Transition.From = OrGroupStartState;
+
+                Transition.From = OrChunk.StartState;
                 Transition.To = NextOrSibling;
                 NFAAddArc(NFA, Label, Transition);
 
-                LoopBackState = NULLSTATE;
-                LastState = NextOrSibling;
+                LastChunk.StartState = NFA_NULLSTATE;
+                LastChunk.EndState = NextOrSibling;
             } break;
-            case '\\':
             default: {
+                uint32_t MyState = NFA->NumStates++;
+
                 nfa_label Label = {};
                 Label.Type = MATCH;
+                Label.A = *Token.Str;
 
                 nfa_transition Transition = {};
-                for (char *c = Token.Str; (c - Token.Str) < Token.Length; ++c) {
-                    // Move the the escaped char
-                    if (*c == '\\' && (c - Token.Str) + 1 < Token.Length) {
-                        c += 1;
-                    }
-                    Label.A = *c;
+                Transition.From = LastChunk.EndState;
+                Transition.To = MyState;
+                NFAAddArc(NFA, Label, Transition);
 
-                    uint32_t MyState = NFA->NumStates++;
-                    Transition.From = LastState;
-                    Transition.To = MyState;
-                    NFAAddArc(NFA, Label, Transition);
-
-                    LoopBackState = Transition.From;
-                    LastState = MyState;
-                }
+                LastChunk.StartState = LastChunk.EndState;
+                LastChunk.EndState = MyState;
             } break;
         }
     }
     nfa_label Label = {};
     Label.Type = EPSILON;
     nfa_transition Transition = {};
-    Transition.From = LastState;
+
+    Transition.From = LastChunk.EndState;
     Transition.To = NFA_ACCEPTSTATE;
     NFAAddArc(NFA, Label, Transition);
 }

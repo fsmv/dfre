@@ -10,76 +10,54 @@ struct token {
     int32_t Length;
 };
 
-lexer_state ReLexer(char *Regex) {
-    lexer_state Result;
-    Result.Pos = Regex;
-
-    return Result;
-}
-
-bool ReLexerHasNext(lexer_state *State) {
+bool LexHasNext(lexer_state *State) {
     bool Result = (*State->Pos != '\0');
     return Result;
 }
 
-token ReLexerNext(lexer_state *State) {
-    Assert(ReLexerHasNext(State));
+#define ESCAPE_CHAR '\\'
 
+token LexNext(lexer_state *State) {
     token Result = {};
+    Result.Str = State->Pos;
 
-    // TODO: add {m}, {m, n}, [], character classes
+    // TODO: add {m}, {m, n}, character classes
 
-    bool Special = false;
-    while(!Special) {
-        switch (*State->Pos) {
-            case '.': 
-            case '*':
-            case '+':
-            case '|':
-            case '?':
-            case '(':
-            case ')':
-            {
-                if (Result.Str == 0) {
-                    Result.Str = State->Pos;
-                    Result.Length = 1;
-                    State->Pos += 1;
-                }
-
-                Special = true;
-            } break;
-
-            case '\\': {
-                if (Result.Str == 0) {
-                    Result.Str = State->Pos;
-                }
-
-                if (*(State->Pos + 1) == '\0') {
-                    Result.Length += 1;
-                    State->Pos += 1;
-                } else {
-                    Result.Length += 2;
-                    State->Pos += 2;
-                }
-
-                Special = false;
-            } break;
-
-            default: {
-                if (Result.Str == 0) {
-                    Result.Str = State->Pos;
-                }
-
-                Result.Length += 1;
+    switch (*State->Pos) {
+        default:
+        case '.':
+        case '*':
+        case '+':
+        case '|':
+        case '?':
+        case '(':
+        case ')':
+        {
+            Result.Length = 1;
+            State->Pos += 1;
+        } break;
+        case '[': {
+            // Skip to the ']' or end of string also handle escaping ']'
+            char *Str;
+            for (Str = State->Pos;
+                 (*Str != ']' || *(Str-1) == ESCAPE_CHAR) && *(Str+1) != '\0';
+                 ++Str) {}
+            Result.Length = 1 + Str - State->Pos;
+            State->Pos = Str + 1;
+        } break;
+        case ESCAPE_CHAR: {
+            Result.Length = 1;
+            if (*(State->Pos + 1) == '\0') {
                 State->Pos += 1;
-                Special = false;
-            } break;
-
-            case '\0': {
-                Special = true;
-            } break;
-        };
-    };
+            } else {
+                Result.Str += 1;
+                State->Pos += 2;
+            }
+        } break;
+        case '\0': {
+            Result.Str = 0;
+        } break;
+    }
 
     return Result;
 }
