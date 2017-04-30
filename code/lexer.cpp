@@ -24,7 +24,6 @@ token LexNext(lexer_state *State) {
     // TODO: add {m}, {m, n}, character classes
 
     switch (*State->Pos) {
-        default:
         case '.':
         case '*':
         case '+':
@@ -32,6 +31,7 @@ token LexNext(lexer_state *State) {
         case '?':
         case '(':
         case ')':
+        case ']':
         {
             Result.Length = 1;
             State->Pos += 1;
@@ -46,13 +46,36 @@ token LexNext(lexer_state *State) {
             State->Pos = Str + 1;
         } break;
         case ESCAPE_CHAR: {
-            Result.Length = 1;
-            if (*(State->Pos + 1) == '\0') {
+            if (*(State->Pos + 1) != '\0') {
                 State->Pos += 1;
-            } else {
-                Result.Str += 1;
-                State->Pos += 2;
             }
+        } // fallthrough
+        default: {
+            Result.Length = 1;
+            State->Pos += 1;
+
+            bool NonActive;
+            do {
+                NonActive = false;
+                switch(*State->Pos) {
+                    default: {
+                        NonActive = true;
+                        State->Pos += 1;
+                        Result.Length += 1;
+                    } break;
+                    case ESCAPE_CHAR:
+                    case '.':
+                    case '*':
+                    case '+':
+                    case '|':
+                    case '?':
+                    case '(':
+                    case ')':
+                    case ']':
+                    case '[':
+                    case '\0': {}
+                }
+            } while (NonActive);
         } break;
         case '\0': {
             Result.Str = 0;

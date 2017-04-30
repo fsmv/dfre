@@ -193,19 +193,21 @@ void RegexToNFA(char *Regex, nfa *NFA) {
                 LastChunk.EndState = NextOrSibling;
             } break;
             default: {
-                uint32_t MyState = NFA->NumStates++;
+                for (int Idx = 0; Idx < Token.Length; ++Idx) {
+                    uint32_t MyState = NFA->NumStates++;
 
-                nfa_label Label = {};
-                Label.Type = MATCH;
-                Label.A = *Token.Str;
+                    nfa_label Label = {};
+                    Label.Type = MATCH;
+                    Label.A = Token.Str[Idx];
 
-                nfa_transition Transition = {};
-                Transition.From = LastChunk.EndState;
-                Transition.To = MyState;
-                NFAAddArc(NFA, Label, Transition);
+                    nfa_transition Transition = {};
+                    Transition.From = LastChunk.EndState;
+                    Transition.To = MyState;
+                    NFAAddArc(NFA, Label, Transition);
 
-                LastChunk.StartState = LastChunk.EndState;
-                LastChunk.EndState = MyState;
+                    LastChunk.StartState = LastChunk.EndState;
+                    LastChunk.EndState = MyState;
+                }
             } break;
         }
     }
