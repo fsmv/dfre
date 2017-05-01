@@ -73,22 +73,6 @@ enum op_type {
     NOARG,
 };
 
-/*
-CheckChar:
-
-EpsilonArcs_[DisableState]: (short)
-DotArcs_[DisableState]: (short)
-
-RangeArcs_[AB]_[DisableState] (short)
-MatchArcs_[A]_[DisableState] (short)
-
-NotInRange_[AB] (short)
-
-- switch statement
-  Match_[A] (a long list of jumps to these first)
-  Match_End (jumps to this are break)
-*/
-
 struct instruction {
     addressing_mode Mode;
 
