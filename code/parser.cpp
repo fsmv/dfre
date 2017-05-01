@@ -72,6 +72,21 @@ void RegexToNFA(char *Regex, nfa *NFA) {
                 LastChunk.StartState = LastChunk.EndState;
                 LastChunk.EndState = MyState;
             } break;
+            case '[': {
+                uint32_t MyState = NFA->NumStates++;
+                nfa_transition Transition = {};
+                Transition.From = LastChunk.EndState;
+                Transition.To = MyState;
+
+                lexer_state Lexer{Token.Str};
+                while (LexHasNextCharSetLabel(&Lexer)) {
+                    nfa_label Label = LexNextCharSetLabel(&Lexer);
+                    NFAAddArc(NFA, Label, Transition);
+                }
+
+                LastChunk.StartState = LastChunk.EndState;
+                LastChunk.EndState = MyState;
+            } break;
             case '*': {
                 if (LastChunk.StartState == NFA_NULLSTATE) {
                     // TODO: report warning / error

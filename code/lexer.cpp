@@ -61,3 +61,35 @@ token LexNext(lexer_state *State) {
 
     return Result;
 }
+
+#include "nfa.h"
+
+bool LexHasNextCharSetLabel(lexer_state *State) {
+    return (*State->Pos != ']');
+}
+
+nfa_label LexNextCharSetLabel(lexer_state *State) {
+    nfa_label Result = {};
+    if (*State->Pos == '[' || *State->Pos == ESCAPE_CHAR) {
+        State->Pos += 1;
+    }
+    char A = *State->Pos++;
+    if (*State->Pos != '-') {
+        Result.A = A;
+        Result.Type = MATCH;
+        return Result;
+    }
+    State->Pos += 1;
+    // TODO: Report an error
+    Assert(*State->Pos != ']');
+    if (*State->Pos == ESCAPE_CHAR) {
+        State->Pos += 1;
+        // TODO: Report an error
+        Assert(*State->Pos != ']');
+    }
+    char B = *State->Pos++;
+    Result.Type = RANGE;
+    Result.A = A;
+    Result.B = B;
+    return Result;
+}
