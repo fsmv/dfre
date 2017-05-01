@@ -5,8 +5,8 @@
 #define X86_OPCODE_H
 
 struct opcode_unpacked {
-    uint8_t Prefixes[4];
-    uint8_t Opcode[3];// 6 bits last two are direction and operand length
+    // uint8_t Prefixes[4]; // not used
+    uint8_t Opcode[2]; // 6 bits last two are direction and operand length
     bool HasModRM;
     uint8_t ModRM; // set operands: mod 2 bit, reg/opcode 3 bits, R/M 3 bits
     uint8_t SIB; // addressing modes: scale 2 bits, index 4 bits, base 3 bits
@@ -262,7 +262,7 @@ inline size_t CountTilNull(uint8_t *Bytes, size_t MaxSize) {
 
 size_t SizeOpcode(opcode_unpacked Opcode) {
     size_t Result = 0;
-    Result += CountTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes));
+    //Result += CountTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes));
     Result += CountTilNull(Opcode.Opcode, ArrayLength(Opcode.Opcode));
 
     if (Opcode.HasModRM) {
@@ -281,7 +281,7 @@ size_t SizeOpcode(opcode_unpacked Opcode) {
 }
 
 uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
-    Dest = WriteTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes), Dest);
+    //Dest = WriteTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes), Dest);
     Dest = WriteTilNull(Opcode.Opcode, ArrayLength(Opcode.Opcode), Dest);
 
     if (Opcode.HasModRM) {
