@@ -30,7 +30,6 @@ void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
     *TransitionLocation = Transition;
 }
 
-
 struct ParenInfo {
     uint32_t LoopBackState;
     uint32_t AcceptState;
@@ -38,7 +37,54 @@ struct ParenInfo {
 
 #define NULLSTATE ((uint32_t) -1)
 
-void ReParse(char *regex, nfa *NFA) {
+struct nfa_chunk {
+    uint32_t BeginState;
+    uint32_t EndState;
+}
+
+nfa_chunk AddRegexToNFA(char *Regex, nfa *NFA) {
+    lex_result Lex = LexNextToken(Regex);
+}
+
+void AddOrGroupToNFA(char *Regex, nfa *NFA) {
+    lex_result Lex = LexNextAlternative(regex);
+    if (!Lex->HasNext) {
+        AddRegexToNFA(Lex.Token.Str, NFA)
+        return;
+    }
+    uint32_t StartState = NFA->AcceptState;
+    uint32_t AcceptState = NFA->NumStates++;
+    nfa_label EpsilonLabel = {}
+    EpsilonLabel.Type = EPSILON;
+    nfa_transition Transition = {}
+    while (Lex.HasNext) {
+        nfa_chunk Chunk = AddRegexToNFA(Lex.Token.Str, NFA);
+
+        Transition.From = Chenk.EndState;
+        Transition.To = AcceptState;
+        NFAAddArc(NFA, Label, Transition);
+        Transition.From = StartState;
+        Transition.To = Chunk.BeginState;
+        NFAAddArc(NFA, Label, Transition);
+    }
+}
+
+void RegexToNFA(char *Regex, nfa *NFA) {
+    NFA->NumStates = 1;
+    NFA->AcceptState = 0;
+    // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
+    nfa_label EpsilonLabel = {};
+    EpsilonLabel.Type = EPSILON;
+    NFACreateArcList(NFA, EpsilonLabel);
+    // NOTE(fsmv): Dot is garunteed to be the second arc list for the code-gen step
+    nfa_label DotLabel = {};
+    DotLabel.Type = DOT;
+    NFACreateArcList(NFA, DotLabel);
+
+    AddOrGroupToNFA(Regex, NFA);
+}
+
+#if 0
     NFA->NumStates = 2; // Reserve 0 for accept, 1 for start
 
     uint32_t LastState = NFA_STARTSTATE;
@@ -217,4 +263,5 @@ void ReParse(char *regex, nfa *NFA) {
     Transition.From = LastState;
     Transition.To = NFA_ACCEPTSTATE;
     NFAAddArc(NFA, Label, Transition);
+#endif
 }

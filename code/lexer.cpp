@@ -1,24 +1,31 @@
 // Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-struct lexer_state {
-    char *Pos;
+struct lex_result {
+    token Token;
+    char *EndPos;
+    bool HasNext;
 };
 
+// NOTE: not null terminated
 struct token {
     char *Str;
-    int32_t Length;
-};
-
-lexer_state ReLexer(char *Regex) {
-    lexer_state Result;
-    Result.Pos = Regex;
-
-    return Result;
+    size_t Length
 }
 
-bool ReLexerHasNext(lexer_state *State) {
-    bool Result = (*State->Pos != '\0');
+lex_result LexNextAlternative(char *Str) {
+    lex_result Result;
+    Result.Token.Str = Str;
+    Result.Token.Length = 0;
+    while(*Str != '\0' && *Str != '|') {
+        Str += 1;
+        Result.Token.Length += 1
+    }
+    Result.HasNext = (*Str != '\0');
+    if (Result.HasNext) {
+        Str += 1;
+    }
+    Result.EndPos = Str;
     return Result;
 }
 

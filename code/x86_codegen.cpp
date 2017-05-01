@@ -197,7 +197,7 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
 
     JmpToEnd->JumpDest = Instructions;
     // Return != 0 if accept state was active, 0 otherwise
-    RI32(AND, REG, EBX, 1 << NFA_ACCEPTSTATE);
+    RI32(AND, REG, EBX, 1 << NFA->AcceptState);
     RET;
 
     return Instructions - InstructionsStart;

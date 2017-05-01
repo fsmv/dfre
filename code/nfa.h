@@ -100,6 +100,7 @@ struct nfa_arc_list {
  */
 struct nfa {
     uint32_t NumStates;
+    uint32_t AcceptState;
 
     size_t ArcListCount;
     size_t SizeOfArcList;
@@ -124,6 +125,5 @@ inline nfa_arc_list *NFAGetArcList(nfa *NFA, size_t Idx) {
 }
 
 #define NFA_STARTSTATE  ((uint32_t) 1)
-#define NFA_ACCEPTSTATE ((uint32_t) 0)
 
 #endif
