@@ -6,7 +6,7 @@
 
 struct opcode_unpacked {
     uint8_t Prefixes[4];
-    uint8_t Opcode[3];//6 bits last twa are direction and operand lengnth
+    uint8_t Opcode[3];// 6 bits last two are direction and operand length
     bool HasModRM;
     uint8_t ModRM; // set operands: mod 2 bit, reg/opcode 3 bits, R/M 3 bits
     uint8_t SIB; // addressing modes: scale 2 bits, index 4 bits, base 3 bits
@@ -239,41 +239,31 @@ opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, uint32_t Imm)
     return Result;
 }
 
-inline uint8_t *WriteNullTerm(uint8_t Array[], uint8_t *Dest) {
-    for (size_t Idx = 0;
-         Idx < ArrayLength(Array);
-         ++Idx)
-    {
-        uint8_t Val = Array[Idx];
-
+inline uint8_t *WriteTilNull(uint8_t *Bytes, size_t MaxSize, uint8_t *Dest) {
+    for (size_t Idx = 0; Idx < MaxSize; ++Idx) {
+        uint8_t Val = Bytes[Idx];
         if (!Val) {
             break;
         }
-
         *Dest++ = Val;
     }
-
     return Dest;
 }
 
-inline size_t CountNullTerm(uint8_t Array[]) {
+inline size_t CountTilNull(uint8_t *Bytes, size_t MaxSize) {
     size_t Count = 0;
-    for (;
-         Count < ArrayLength(Array);
-         ++Count)
-    {
-        if (!Array[Count]) {
+    for (; Count < MaxSize; ++Count) {
+        if (!Bytes[Count]) {
             break;
         }
     }
-
     return Count;
 }
 
 size_t SizeOpcode(opcode_unpacked Opcode) {
     size_t Result = 0;
-    Result += CountNullTerm(Opcode.Prefixes);
-    Result += CountNullTerm(Opcode.Opcode);
+    Result += CountTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes));
+    Result += CountTilNull(Opcode.Opcode, ArrayLength(Opcode.Opcode));
 
     if (Opcode.HasModRM) {
         Result += 1;
@@ -283,7 +273,7 @@ size_t SizeOpcode(opcode_unpacked Opcode) {
         Result += 1;
     }
 
-    Result += CountNullTerm(Opcode.Displacement);
+    Result += CountTilNull(Opcode.Displacement, ArrayLength(Opcode.Displacement));
 
     Result += Opcode.ImmCount;
 
@@ -291,8 +281,8 @@ size_t SizeOpcode(opcode_unpacked Opcode) {
 }
 
 uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
-    Dest = WriteNullTerm(Opcode.Prefixes, Dest);
-    Dest = WriteNullTerm(Opcode.Opcode, Dest);
+    Dest = WriteTilNull(Opcode.Prefixes, ArrayLength(Opcode.Prefixes), Dest);
+    Dest = WriteTilNull(Opcode.Opcode, ArrayLength(Opcode.Opcode), Dest);
 
     if (Opcode.HasModRM) {
         *Dest++ = Opcode.ModRM;
@@ -302,7 +292,7 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
         *Dest++ = Opcode.SIB;
     }
 
-    Dest = WriteNullTerm(Opcode.Displacement, Dest);
+    Dest = WriteTilNull(Opcode.Displacement, ArrayLength(Opcode.Displacement), Dest);
 
     for (size_t ImmIdx = 0; ImmIdx < Opcode.ImmCount; ++ImmIdx) {
         *Dest++ = Opcode.Immediate[ImmIdx];
