@@ -2,15 +2,48 @@
 // Provided under the MIT License: https://mit-license.org
 
 #include "nfa.h"
+#include "x86_opcode.h"
+
+void PrintRegex(char *Regex) {
+    char *Ch;
+    for (Ch = Regex; *Ch != '\0'; ++Ch) {}
+    size_t Size = Ch - Regex;
+
+    Print(Out, "Size: %u Bytes\n\n", Size);
+    Print(Out, Regex);
+    Print(Out, "\n");
+}
+
+void PrintNFALabel(nfa_label Label) {
+    switch (Label.Type) {
+    case MATCH:
+        Print(Out, "'%c'", Label.A);
+        break;
+    case RANGE:
+        Print(Out, "'%c-%c'", Label.A, Label.B);
+        break;
+    case EPSILON:
+        Print(Out, "'Epsilon'", Label.A);
+        break;
+    case DOT:
+        Print(Out, "'.'", Label.A);
+        break;
+    }
+}
 
 void PrintNFA(nfa *NFA) {
-    Print(Out, "Number of states: %u\n", NFA->NumStates);
+    size_t NFASize = sizeof(*NFA) - sizeof(NFA->ArcLists) +
+                     (NFA->ArcListCount - 1) * NFA->SizeOfArcList;
+
+    Print(Out, "Size: %u Bytes\n", NFASize);
+    Print(Out, "Number of states: %u\n\n", NFA->NumStates);
 
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
         nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
 
-        Print(Out, "Label: %u, %c, %c\n",
-              ArcList->Label.Type, ArcList->Label.A, ArcList->Label.B);
+        Print(Out, "Arcs labeled ");
+        PrintNFALabel(ArcList->Label);
+        Print(Out, "; Num: %u\n", ArcList->TransitionCount);
 
         for (size_t TransitionIdx = 0;
              TransitionIdx < ArcList->TransitionCount;
@@ -18,16 +51,25 @@ void PrintNFA(nfa *NFA) {
         {
             nfa_transition *Transition = &ArcList->Transitions[TransitionIdx];
 
-            Print(Out, "\t%u => %u\n", Transition->From, Transition->To);
+            Print(Out, "    %u => %u\n", Transition->From, Transition->To);
         }
     }
 }
 
-#include "x86_opcode.h"
-
 void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
+    size_t InstructionsSize = sizeof(instruction) * NumInstructions;
+    size_t NumJumps = 0;
+    for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
+        if (Instructions[Idx].Type == JUMP) {
+            NumJumps += 1;
+        }
+    }
+    Print(Out, "Size: %u Bytes\n", InstructionsSize);
+    Print(Out, "Num Instructions: %u\n", NumInstructions);
+    Print(Out, "Num Jumps: %u\n\n", NumJumps);
+
     Print(Out, "   Op #   | Mode | Op  |     Arg1      | Arg2\n");
-    Print(Out, "----------------------------------------------\n");
+    Print(Out, "-----------------------------------------------\n");
     //           12345678 | REG  | INC | Op # 12345678 |
     //           12345678 | REG  | INC | 12345678      | EAX
     //           12345678 | REG  | INC | EAX           |
@@ -118,7 +160,14 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
     }
 }
 
+void PrintUnpackedOpcodes(opcode_unpacked *Opcodes, size_t NumOpcodes) {
+    Print(Out, "Size %u Bytes\n\n", sizeof(opcode_unpacked) * NumOpcodes);
+    Print(Out, "This is the instructions above in a struct that\n"
+               "has real x86 codes instead of our enums.\n");
+}
+
 void PrintByteCode(uint8_t *Code, size_t Size) {
+    Print(Out, "Size: %u Bytes\n\n", Size);
     for (size_t i = 0; i < Size; ++i) {
         char IntStr[4];
         if (Code[i] < 0x10) {
@@ -132,5 +181,8 @@ void PrintByteCode(uint8_t *Code, size_t Size) {
         IntStr[3] = '\0';
 
         Print(Out, IntStr);
+        if ((i + 1) % 16 == 0) {
+            Print(Out, "\n");
+        }
     }
 }

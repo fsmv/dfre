@@ -69,11 +69,11 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
 }
 
 // A printf clone with less features (not using CRT)
-void Print(HANDLE Out, const char *FormatString, ...) {
+uint32_t Print(HANDLE Out, const char *FormatString, ...) {
     va_list args;
     va_start(args, FormatString);
 
-    DWORD CharsWritten;
+    DWORD CharsWritten = 0;
     DWORD Idx = 0;
     for (; FormatString[Idx]; ++Idx) {
         if (FormatString[Idx] == '%') {
@@ -84,8 +84,7 @@ void Print(HANDLE Out, const char *FormatString, ...) {
 
                 char *Str = va_arg(args, char*);
                 DWORD Len = 0;
-                for (; Str[Len]; ++Len)
-                    ;
+                for (; Str[Len]; ++Len) {}
                 WriteConsoleA(Out, Str, Len, &CharsWritten, 0);
 
             } goto next;
@@ -119,6 +118,7 @@ void Print(HANDLE Out, const char *FormatString, ...) {
     }
 
     va_end(args);
+    return CharsWritten;
 }
 
 #include "printers.cpp"
@@ -151,8 +151,7 @@ size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
     }
     *Curr++ = '\0';
     // Skip any extra spaces
-    for (; *Curr && *Curr == ' '; ++Curr)
-        ;
+    for (; *Curr && *Curr == ' '; ++Curr) {}
 
     // Arguments
     while (*Curr) {
@@ -170,8 +169,7 @@ size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
         if (*Curr == ' ') {
             *Curr++ = '\0';
             // Skip any extra spaces
-            for (; *Curr && *Curr == ' '; ++Curr)
-                ;
+            for (; *Curr && *Curr == ' '; ++Curr) {}
         }
     }
 
@@ -230,9 +228,8 @@ int main() {
         return 1;
     }
 
-    Print(Out, "------------------- Regex --------------------\n\n");
-    Print(Out, Regex);
-    Print(Out, "\n");
+    Print(Out, "-------------------- Regex --------------------\n\n");
+    PrintRegex(Regex);
 
     // Allocate storage for and then run each stage of the compiler in order
     // TODO: build an allocator for the stages to use with flexible storage
@@ -250,7 +247,7 @@ int main() {
     // Convert regex to NFA
     RegexToNFA(Regex, NFA);
 
-    Print(Out, "\n-------------------- NFA ---------------------\n\n");
+    Print(Out, "\n--------------------- NFA ---------------------\n\n");
     PrintNFA(NFA);
 
     // Note: this is all x86-specific after this point
@@ -267,7 +264,7 @@ int main() {
     // Convert the NFA into an intermediate code representation
     size_t InstructionsGenerated = GenerateInstructions(NFA, Instructions);
 
-    Print(Out, "\n---------------- Instructions ----------------\n\n");
+    Print(Out, "\n----------------- Instructions ----------------\n\n");
     PrintInstructions(Instructions, InstructionsGenerated);
 
     // Allocate storage for the unpacked x86 opcodes
@@ -282,24 +279,27 @@ int main() {
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
+    Print(Out, "\n----------------- x86 Unpacked ----------------\n\n");
+    PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
+
     // Allocate storage for the actual byte code
     size_t CodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; // sizeof(opcode_unpacked) is an upper bound
     uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
-    Print(Out, "\n-------------------- Code --------------------\n\n");
+    Print(Out, "\n--------------------- Code --------------------\n\n");
     PrintByteCode(Code, CodeWritten);
 
     if (Word) {
         bool IsMatch = RunCode(Code, CodeWritten, Word);
 
-        Print(Out, "\n\n------------------- Result -------------------\n\n");
+        Print(Out, "\n\n-------------------- Result -------------------\n\n");
         Print(Out, "Search Word: %s\n", Word);
         if (IsMatch) {
-            Print(Out, "MATCH\n");
+            Print(Out, "Match\n");
         }else{
-            Print(Out, "NO MATCH\n");
+            Print(Out, "No Match\n");
         }
     }
 
