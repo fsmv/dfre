@@ -1,0 +1,7 @@
+#!/bin/bash
+
+CompilerOptions="-nostdlib "
+CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
+CompilerOptions+="-m32 "
+
+g++ ../code/nix32_start.S ../code/nix32_main.cpp $CompilerOptions -o re
