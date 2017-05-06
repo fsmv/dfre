@@ -1,6 +1,9 @@
 // Copyright (c) 2016 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
+#ifndef X86_OPCODE_H
+#define X86_OPCODE_H
+
 struct opcode_unpacked {
     uint8_t Prefixes[4];
     uint8_t Opcode[3];//6 bits last twa are direction and operand lengnth
@@ -196,9 +199,7 @@ inline uint8_t *WriteUpToZero(uint8_t Array[], uint8_t *Dest) {
     return Dest;
 }
 
-size_t WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
-    uint8_t *Start = Dest;
-
+uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
     Dest = WriteUpToZero(Opcode.Prefixes, Dest);
     Dest = WriteUpToZero(Opcode.Opcode, Dest);
 
@@ -216,5 +217,19 @@ size_t WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
         *Dest++ = Opcode.Immediate[ImmIdx];
     }
 
-    return (Dest - Start);
+    return Dest;
 }
+
+#define J8(op, offs) Code = (WriteOpcode(OpJump8((op), (offs)), Code))
+#define J32(op, offs) Code = (WriteOpcode(OpJump32((op), (offs)), Code))
+
+#define INC8(mode, reg) Code = (WriteOpcode(OpReg(INC, (mode), (reg), false), Code))
+#define INC32(mode, reg) Code = (WriteOpcode(OpReg(INC, (mode), (reg), true), Code))
+
+#define RR8(op, mode, dest, src) Code = (WriteOpcode(OpRegReg((op), (mode), (dest), (src), false), Code))
+#define RR32(op, mode, dest, src) Code = (WriteOpcode(OpRegReg((op), (mode), (dest), (src), true), Code))
+
+#define RI8(op, mode, dest, imm) Code = (WriteOpcode(OpRegI8((op), (mode), (dest), (imm)), Code))
+#define RI32(op, mode, dest, imm) Code = (WriteOpcode(OpRegI32((op), (mode), (dest), (imm)), Code))
+
+#endif
