@@ -1,48 +1,15 @@
 // Copyright (c) 2016 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
+// TODO: Do we actually need a separate lexer?
 #include "lexer.cpp"
+#include "nfa.h"
 
-struct nfa_transition {
-    uint32_t From;
-    uint32_t To;
-};
-
-enum nfa_arc_type {
-    MATCH = 0, DOT, EPSILON, RANGE
-};
-
-struct nfa_label {
-    nfa_arc_type Type;
-    char A;
-    char B;
-};
-
-struct nfa_arc_list {
-    nfa_label Label;
-    size_t TransitionCount;
-    nfa_transition Transitions[1];
-};
-
-struct nfa {
-    uint32_t NumStates;
-    size_t ArcListCount;
-    size_t SizeOfArcList;
-    nfa_arc_list ArcLists[1];
-};
-
-bool operator==(nfa_label A, nfa_label B) {
-    bool Result = (A.Type == B.Type);
-    Result     &= (A.A == B.A);
-    Result     &= (A.B == B.B);
-
-    return Result;
-}
-
-inline nfa_arc_list *NFAGetArcList(nfa *NFA, size_t Idx) {
-    uint8_t *Result = (uint8_t *) NFA->ArcLists
-                    + Idx * NFA->SizeOfArcList;
-    return (nfa_arc_list *) Result;
+inline nfa_arc_list *NFACreateArcList(nfa *NFA, nfa_label Label) {
+    nfa_arc_list *ArcList = NFAGetArcList(NFA, NFA->ArcListCount++);
+    ArcList->Label = Label;
+    ArcList->TransitionCount = 0;
+    return ArcList;
 }
 
 void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
@@ -55,9 +22,7 @@ void NFAAddArc(nfa *NFA, nfa_label Label, nfa_transition Transition) {
     }
 
     if (!ArcListToUse) {
-        ArcListToUse = NFAGetArcList(NFA, NFA->ArcListCount++);
-        ArcListToUse->Label = Label;
-        ArcListToUse->TransitionCount = 0;
+        ArcListToUse = NFACreateArcList(NFA, Label);
     }
 
     nfa_transition *TransitionLocation =
@@ -69,6 +34,16 @@ void ReParse(char *regex, nfa *NFA) {
     NFA->NumStates = 1;
 
     uint32_t LoopBackState = -1;
+
+    // NOTE(fsmv): Epsilon is garunteed to be the first arc list for the code-gen step
+    nfa_label EpsilonLabel = {};
+    EpsilonLabel.Type = EPSILON;
+    NFACreateArcList(NFA, EpsilonLabel);
+
+    // NOTE(fsmv): Dot is garunteed to be the second arc list for the code-gen step
+    nfa_label DotLabel = {};
+    DotLabel.Type = DOT;
+    NFACreateArcList(NFA, DotLabel);
 
     lexer_state Lexer = ReLexer(regex);
     while(ReLexerHasNext(&Lexer)) {

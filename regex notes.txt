@@ -44,16 +44,23 @@ if [0] is active then disable [0] then enable { [1], [3] }
 
 x86:
 
+xor A, A
+mov B, -1
+
 BT D, 0
 jnc if_not_zero
-and D, 0111
-or  D, 0101
+and B, 0111
+or  A, 0101
 if_not_zero:
+
 BT D, 3
 jnc if_not_three
-and D, 1110
-or  D, 1000
+and B, 1110
+or  A, 1000
 if_not_three
+
+and D, B
+or  D, A
 
 arm:
 
@@ -62,3 +69,7 @@ bne if_not_zero
 and D, 0111
 or  D, 0101
 if_not_zero:
+
+
+
+
