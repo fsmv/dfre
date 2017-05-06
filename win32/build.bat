@@ -1,7 +1,7 @@
 @echo off
 
 set EXEName=re.exe
-set SRC=..\code\winmain.cpp
+set SRC=..\code\win32_main.cpp
 set WindowsLibs=kernel32.lib user32.lib
 
 rem -------------------------------------
