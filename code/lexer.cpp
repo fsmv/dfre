@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Andrew Kallmeyer <fsmv@sapium.net>
+// Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
 struct lexer_state {
