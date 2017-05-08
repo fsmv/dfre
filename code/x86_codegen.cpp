@@ -8,11 +8,11 @@ void NFASortArcList(nfa_arc_list *ArcList) {
     // TODO(fsmv): Replace with radix sort or something
 
     for (size_t ATransitionIdx = 0;
-         ATransitionIdx < ArcList->TransitionCount;
+         ATransitionIdx < ArcList->NumTransitions;
          ++ATransitionIdx)
     {
         for (size_t BTransitionIdx = ATransitionIdx + 1;
-             BTransitionIdx < ArcList->TransitionCount;
+             BTransitionIdx < ArcList->NumTransitions;
              ++BTransitionIdx)
         {
             if (ArcList->Transitions[ATransitionIdx].From >
@@ -49,7 +49,7 @@ GenInstructionsArcList(nfa_arc_list *ArcList, instruction *Instructions) {
     // TODO(fsmv): big int here
     uint32_t ActivateMask = 0;
     for (size_t TransitionIdx = 0;
-         TransitionIdx < ArcList->TransitionCount;
+         TransitionIdx < ArcList->NumTransitions;
          ++TransitionIdx)
     {
         nfa_transition *Arc = &ArcList->Transitions[TransitionIdx];
@@ -92,7 +92,7 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     // Loop following epsilon arcs until following doesn't activate any new states
     instruction *EpsilonLoopStart = Instructions;
     // Epsilon arcs, garunteed to be the first arc list
-    nfa_arc_list *EpsilonArcs = NFAGetArcList(NFA, 0);
+    nfa_arc_list *EpsilonArcs = &NFA->ArcLists[0];
     Assert(EpsilonArcs->Label.Type == EPSILON);
     RR32(XOR, REG, ECX, ECX); // Clear states to enable
     RR32(MOV, REG, EDX, EBX); // Save current active states list
@@ -109,16 +109,22 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     RR32(MOV, REG, EDX, EBX); // Save current active states list
     R32(NOT, REG, EDX); // Remember to disable any currently active state
 
-    // Dot arcs, garunteed to be the second arc list
-    nfa_arc_list *DotArcs = NFAGetArcList(NFA, 1);
-    Assert(DotArcs->Label.Type == DOT);
+    nfa_arc_list *StartList = NFANextArcList(EpsilonArcs);
+
+    // Dot arcs
+    nfa_arc_list *DotArcs = StartList;
+    for (size_t Idx = 0; Idx < NFA->NumArcLists; ++Idx) {
+        if (DotArcs->Label.Type == DOT) {
+            break;
+        }
+        DotArcs = NFANextArcList(DotArcs);
+    }
     Instructions = GenInstructionsArcList(DotArcs, Instructions);
 
     // Range arcs
-    for (size_t ArcListIdx = 2; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
-        nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
-
-        if (ArcList->Label.Type == RANGE) {
+    nfa_arc_list *ArcList = StartList;
+    for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
+        if (ArcList->Label.Type != RANGE) {
             RI8(CMP, MEM, EAX, ArcList->Label.A);
             instruction *Jump1 = J(JL);
 
@@ -130,25 +136,31 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
             Jump1->JumpDest = Instructions;
             Jump2->JumpDest = Instructions;
         }
+        ArcList = NFANextArcList(ArcList);
     }
 
     // Match Arcs
 
     // Used for building a linked list to store which instructions need JumpDest filled in
+    instruction *StartMatchCharJmp = 0;
     instruction *LastMatchCharJmp = 0;
     instruction *LastMatchEndJmp = 0;
 
     // Write test and jump for each letter to match. The cases of a switch statement
-    for (size_t ArcListIdx = 2; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
-        nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
-
+    ArcList = StartList;
+    for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type == MATCH) {
             RI8(CMP, MEM, EAX, ArcList->Label.A);
             instruction *NextMatchCharJmp = J(JE);
             // do a linked list so we can find where to fill in the jump dests
-            NextMatchCharJmp->JumpDest = LastMatchCharJmp;
+            if (LastMatchCharJmp) {
+                LastMatchCharJmp->JumpDest = NextMatchCharJmp;
+            } else {
+                StartMatchCharJmp = NextMatchCharJmp;
+            }
             LastMatchCharJmp = NextMatchCharJmp;
         }
+        ArcList = NFANextArcList(ArcList);
     }
 
     // jump to the end if it's not a character we want to match
@@ -160,16 +172,14 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     }
 
     // Write the body of the switch statement for each char
-    // loop backwards because the linked list for MatchChar jumps is backwards
-    for (size_t ArcListIdx = NFA->ArcListCount - 1; ArcListIdx >= 2; --ArcListIdx) {
-        nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
-
+    ArcList = StartList;
+    for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type == MATCH) {
             // Fill the last jump dest in the linked list with this location,
             // then advance the linked list
-            instruction *NextMatchCharJmp = LastMatchCharJmp->JumpDest;
-            LastMatchCharJmp->JumpDest = Instructions;
-            LastMatchCharJmp = NextMatchCharJmp;
+            instruction *NextMatchCharJmp = StartMatchCharJmp->JumpDest;
+            StartMatchCharJmp->JumpDest = Instructions;
+            StartMatchCharJmp = NextMatchCharJmp;
 
             Instructions = GenInstructionsArcList(ArcList, Instructions);
 
@@ -178,6 +188,7 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
             NextMatchEndJmp->JumpDest = LastMatchEndJmp;
             LastMatchEndJmp = NextMatchEndJmp;
         }
+        ArcList = NFANextArcList(ArcList);
     }
 
     // Fill in the break jump locations

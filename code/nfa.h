@@ -48,6 +48,7 @@ struct nfa_label {
     char B;
 };
 
+#define NFA_TRANSITIONS_PER_LIST 8
 /**
  * A list of arcs in the NFA which have the same label.
  *
@@ -55,9 +56,8 @@ struct nfa_label {
  */
 struct nfa_arc_list {
     nfa_label Label;
-
-    size_t TransitionCount;
-    nfa_transition Transitions[1];
+    size_t NumTransitions;
+    nfa_transition Transitions[NFA_TRANSITIONS_PER_LIST];
 };
 
 /**
@@ -101,8 +101,8 @@ struct nfa_arc_list {
 struct nfa {
     uint32_t NumStates;
 
-    size_t ArcListCount;
-    size_t SizeOfArcList;
+    size_t NumArcListsAllocated;
+    size_t NumArcLists;
     // We allocate extra space at the end of the struct for this array
     nfa_arc_list ArcLists[1];
 };
@@ -116,11 +116,21 @@ inline bool operator==(nfa_label A, nfa_label B) {
     return Result;
 }
 
-// Index into the arc_list array in an nfa struct
-inline nfa_arc_list *NFAGetArcList(nfa *NFA, size_t Idx) {
-    uint8_t *Result = (uint8_t *) NFA->ArcLists
-                    + Idx * NFA->SizeOfArcList;
-    return (nfa_arc_list *) Result;
+// Check equality of nfa_label structs
+inline bool operator!=(nfa_label A, nfa_label B) {
+    return !(A == B);
+}
+
+nfa_arc_list *NFANextArcList(nfa_arc_list *ArcList) {
+    size_t ExtraTransitions = 0;
+    if (ArcList->NumTransitions > NFA_TRANSITIONS_PER_LIST) {
+        ExtraTransitions = ArcList->NumTransitions - NFA_TRANSITIONS_PER_LIST;
+    }
+    size_t ExtraArcLists = ExtraTransitions / NFA_TRANSITIONS_PER_LIST;
+    if (ExtraTransitions % NFA_TRANSITIONS_PER_LIST != 0) {
+        ExtraArcLists += 1;
+    }
+    return ArcList + 1 + ExtraArcLists;
 }
 
 #define NFA_NULLSTATE ((uint32_t) -1)

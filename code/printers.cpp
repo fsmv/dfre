@@ -32,27 +32,28 @@ void PrintNFALabel(nfa_label Label) {
 }
 
 void PrintNFA(nfa *NFA) {
-    size_t NFASize = sizeof(*NFA) - sizeof(NFA->ArcLists) +
-                     (NFA->ArcListCount - 1) * NFA->SizeOfArcList;
+    size_t NFASize = sizeof(nfa) +
+                     (NFA->NumArcListsAllocated - 1) * sizeof(nfa_arc_list);
 
     Print(Out, "Size: %u Bytes\n", NFASize);
     Print(Out, "Number of states: %u\n\n", NFA->NumStates);
 
-    for (size_t ArcListIdx = 0; ArcListIdx < NFA->ArcListCount; ++ArcListIdx) {
-        nfa_arc_list *ArcList = NFAGetArcList(NFA, ArcListIdx);
-
+    nfa_arc_list *ArcList = &NFA->ArcLists[0];
+    for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         Print(Out, "Arcs labeled ");
         PrintNFALabel(ArcList->Label);
-        Print(Out, "; Num: %u\n", ArcList->TransitionCount);
+        Print(Out, "; Num: %u\n", ArcList->NumTransitions);
 
         for (size_t TransitionIdx = 0;
-             TransitionIdx < ArcList->TransitionCount;
+             TransitionIdx < ArcList->NumTransitions;
              ++TransitionIdx)
         {
             nfa_transition *Transition = &ArcList->Transitions[TransitionIdx];
 
             Print(Out, "    %u => %u\n", Transition->From, Transition->To);
         }
+
+        ArcList = NFANextArcList(ArcList);
     }
 }
 

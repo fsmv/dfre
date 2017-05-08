@@ -121,6 +121,7 @@ uint32_t Print(HANDLE Out, const char *FormatString, ...) {
     return CharsWritten;
 }
 
+#include "win32_mem_arena.cpp"
 #include "printers.cpp"
 
 size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
@@ -232,20 +233,11 @@ int main() {
     PrintRegex(Regex);
 
     // Allocate storage for and then run each stage of the compiler in order
-    // TODO: build an allocator for the stages to use with flexible storage
-
-    // Allocate NFA stage storage
-    size_t ArcListSize = sizeof(nfa_arc_list) + 32 * sizeof(nfa_transition);
-    size_t NFASize = sizeof(nfa) + 32 * ArcListSize;
-    nfa *NFA = (nfa *) VirtualAlloc(0, NFASize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    NFA->SizeOfArcList = ArcListSize;
-    if (!NFA) {
-        Print(Out, "Could not allocate space for NFA\n");
-        return 1;
-    }
+    //mem_arena ReadArena = ArenaInit();
+    mem_arena WriteArena = ArenaInit();
 
     // Convert regex to NFA
-    RegexToNFA(Regex, NFA);
+    nfa *NFA = RegexToNFA(Regex, &WriteArena);
 
     Print(Out, "\n--------------------- NFA ---------------------\n\n");
     PrintNFA(NFA);
