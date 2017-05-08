@@ -92,7 +92,7 @@ size_t GenerateInstructions(nfa *NFA, instruction *Instructions) {
     // Loop following epsilon arcs until following doesn't activate any new states
     instruction *EpsilonLoopStart = Instructions;
     // Epsilon arcs, garunteed to be the first arc list
-    nfa_arc_list *EpsilonArcs = &NFA->ArcLists[0];
+    nfa_arc_list *EpsilonArcs = NFAFirstArcList(NFA);
     Assert(EpsilonArcs->Label.Type == EPSILON);
     RR32(XOR, REG, ECX, ECX); // Clear states to enable
     RR32(MOV, REG, EDX, EBX); // Save current active states list

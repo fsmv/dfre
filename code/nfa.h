@@ -104,7 +104,7 @@ struct nfa {
     size_t NumArcListsAllocated;
     size_t NumArcLists;
     // We allocate extra space at the end of the struct for this array
-    nfa_arc_list ArcLists[1];
+    nfa_arc_list _ArcLists[1];
 };
 
 // Check equality of nfa_label structs
@@ -121,7 +121,13 @@ inline bool operator!=(nfa_label A, nfa_label B) {
     return !(A == B);
 }
 
+nfa_arc_list *NFAFirstArcList(nfa *NFA) {
+    return &NFA->_ArcLists[0];
+}
+
 nfa_arc_list *NFANextArcList(nfa_arc_list *ArcList) {
+    // TODO: Maybe just store the number of arc list slots this list takes up.
+    //       If we did that, we wouldn't have these branches here.
     size_t ExtraTransitions = 0;
     if (ArcList->NumTransitions > NFA_TRANSITIONS_PER_LIST) {
         ExtraTransitions = ArcList->NumTransitions - NFA_TRANSITIONS_PER_LIST;

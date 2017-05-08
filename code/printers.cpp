@@ -38,7 +38,7 @@ void PrintNFA(nfa *NFA) {
     Print(Out, "Size: %u Bytes\n", NFASize);
     Print(Out, "Number of states: %u\n\n", NFA->NumStates);
 
-    nfa_arc_list *ArcList = &NFA->ArcLists[0];
+    nfa_arc_list *ArcList = NFAFirstArcList(NFA);
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         Print(Out, "Arcs labeled ");
         PrintNFALabel(ArcList->Label);

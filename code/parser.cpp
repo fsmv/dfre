@@ -11,7 +11,7 @@ nfa *NFAAllocArcList(mem_arena *Arena, nfa_label Label) {
     nfa *NFA = (nfa *)Arena->Base;
 
     NFA->NumArcListsAllocated += 1;
-    nfa_arc_list *ArcList = &NFA->ArcLists[NFA->NumArcLists++];
+    nfa_arc_list *ArcList = &NFA->_ArcLists[NFA->NumArcLists++];
     ArcList->Label = Label;
     ArcList->NumTransitions = 0;
     return NFA;
@@ -21,7 +21,7 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
     nfa *NFA = (nfa *)Arena->Base;
     nfa_arc_list *ArcListToUse = (nfa_arc_list *) 0;
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
-        nfa_arc_list *TestArcList = &NFA->ArcLists[ArcListIdx];
+        nfa_arc_list *TestArcList = &NFA->_ArcLists[ArcListIdx];
         if (TestArcList->Label == Label &&
             TestArcList->NumTransitions < NFA_TRANSITIONS_PER_LIST)
         {
@@ -31,7 +31,7 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
 
     if (!ArcListToUse) {
         NFA = NFAAllocArcList(Arena, Label);
-        ArcListToUse = &NFA->ArcLists[NFA->NumArcLists - 1];
+        ArcListToUse = &NFA->_ArcLists[NFA->NumArcLists - 1];
     }
 
     nfa_transition *TransitionLocation =
@@ -40,24 +40,28 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
     return NFA;
 }
 
-// Put arc lists with the same label next to eachother and combine the
-// transition lists.
-//
-// Before: [ {EPSILON, 2, {trans_a, trans_b}}, {'A', 1, {trans_c}}, {EPSILON, 1, {trans_d}} ]
-// After:  [ {EPSILON, 3, {trans_a, trans_b, trans_d}}, {'A', 1, {trans_c}} ]
-//
-// In NFA generation arcs lists are limited to NFA_TRANSITIONS_PER_LIST
-// transitions each. To extend the list we simply add another arc list with the
-// same label. To make looping over the transitions list in the code gen step
-// easier, we want to pack those lists with the same label together with one,
-// larger transition list.
-//
-// Combined ArcLists are not moved so that they're one after another. That is:
-// if a list was made from 3 combined lists (has > 2 * NFA_TRANSITIONS_PER_LIST
-// transitions), then that list will take up 3 * sizeof(nfa_arc_list) bytes.
+/**
+ * Put arc lists with the same label next to eachother and combine the
+ * transition lists.
+ *
+ * Before: [ {EPSILON, 2, {trans_a, trans_b}}, {'A', 1, {trans_c}}, {EPSILON, 1, {trans_d}} ]
+ * After:  [ {EPSILON, 3, {trans_a, trans_b, trans_d}}, {'A', 1, {trans_c}} ]
+ *
+ * In NFA generation, arc_lists are limited to NFA_TRANSITIONS_PER_LIST
+ * transitions each. To extend the list we simply add another arc_list with the
+ * same label. To make looping over the transitions list in the code gen step
+ * easier, we want to pack those lists with the same label together into one
+ * larger arc_list list.
+ *
+ * Combined arc_lists are not moved so that they're one after another. That is:
+ * if a list was made from 3 combined lists (has > 2 * NFA_TRANSITIONS_PER_LIST
+ * transitions), then that list will take up 3 * sizeof(nfa_arc_list) bytes.
+ * We already have the memory allocated so moving around the memory to compact
+ * it would just waste time.
+ */
 void NFACombineArcLists(nfa *NFA) {
     size_t NumListsRemoved = 0;
-    nfa_arc_list *CurrList = &NFA->ArcLists[0];
+    nfa_arc_list *CurrList = NFAFirstArcList(NFA);
     // Skip the last one because it won't have any children
     for (size_t Idx = 0; Idx < NFA->NumArcLists - 1; ++Idx) {
         if (CurrList->NumTransitions < NFA_TRANSITIONS_PER_LIST) {
@@ -91,6 +95,7 @@ void NFACombineArcLists(nfa *NFA) {
             if (ChildCopy.NumTransitions < NFA_TRANSITIONS_PER_LIST) {
                 break;
             }
+
             Child += 1;
         }
         NumListsRemoved += ChildrenFound;
@@ -113,8 +118,8 @@ nfa *RegexToNFA(char *Regex, mem_arena *Arena) {
     NFA->NumArcLists = NFA->NumArcListsAllocated = 1; // Reserve 0 for epsilon
     nfa_label EpsilonLabel = {};
     EpsilonLabel.Type = EPSILON;
-    NFA->ArcLists[0].Label = EpsilonLabel;
-    NFA->ArcLists[0].NumTransitions = 0;
+    NFA->_ArcLists[0].Label = EpsilonLabel;
+    NFA->_ArcLists[0].NumTransitions = 0;
 
     // LastChunk.StartState == NFA_NULLSTATE means the last chunk cannot be looped
     chunk_bounds LastChunk{NFA_NULLSTATE, NFA_STARTSTATE};
