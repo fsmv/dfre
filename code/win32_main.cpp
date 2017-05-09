@@ -240,6 +240,7 @@ int main() {
     nfa *NFA = RegexToNFA(Regex, &ArenaA);
 
     Print(Out, "\n--------------------- NFA ---------------------\n\n");
+    PrintArena("Arena A", &ArenaA);
     PrintNFA(NFA);
 
     // Note: this is all x86-specific after this point
@@ -250,6 +251,7 @@ int main() {
     instruction *Instructions = (instruction *)ArenaB.Base;
 
     Print(Out, "\n----------------- Instructions ----------------\n\n");
+    PrintArena("Arena B", &ArenaB);
     PrintInstructions(Instructions, InstructionsGenerated);
 
     // Allocate storage for the unpacked x86 opcodes
@@ -263,6 +265,7 @@ int main() {
     // Note: no more return count here, this keeps the same number of instructions
 
     Print(Out, "\n----------------- x86 Unpacked ----------------\n\n");
+    PrintArena("Arena A", &ArenaA);
     PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
 
     // Allocate storage for the actual byte code
@@ -276,6 +279,7 @@ int main() {
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
     Print(Out, "\n--------------------- Code --------------------\n\n");
+    PrintArena("Arena B", &ArenaB);
     PrintByteCode(Code, CodeWritten);
 
     if (Word) {

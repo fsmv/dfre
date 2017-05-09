@@ -3,6 +3,12 @@
 
 #include "nfa.h"
 #include "x86_opcode.h"
+#include "mem_arena.h"
+
+void PrintArena(const char *Name, mem_arena *Arena) {
+    Print(Out, "%s\n  Used: %u\n  Committed: %u\n  Reserved: %u\n\n",
+          Name, Arena->Used, Arena->Committed, Arena->Reserved);
+}
 
 void PrintRegex(char *Regex) {
     char *Ch;
