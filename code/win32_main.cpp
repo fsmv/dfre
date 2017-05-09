@@ -253,12 +253,10 @@ int main() {
     PrintInstructions(Instructions, InstructionsGenerated);
 
     // Allocate storage for the unpacked x86 opcodes
-    size_t UnpackedOpcodesSize = sizeof(opcode_unpacked) * InstructionsGenerated;
-    opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*) VirtualAlloc(0, UnpackedOpcodesSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (!UnpackedOpcodes) {
-        Print(Out, "Could not allocate space for Unpacked Opcodes");
-        return 1;
-    }
+    NFA = (nfa*)0;
+    ArenaA.Used = 0;
+    Alloc(&ArenaA, sizeof(opcode_unpacked) * InstructionsGenerated);
+    opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*)ArenaA.Base;
 
     // Turn the instructions into x86 op codes and resolve jump destinations
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
@@ -268,8 +266,12 @@ int main() {
     PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
 
     // Allocate storage for the actual byte code
-    size_t CodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; // sizeof(opcode_unpacked) is an upper bound
-    uint8_t *Code = (uint8_t*) VirtualAlloc(0, CodeSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    // TODO: Make PackCode allocate a tighter amount of space
+    Instructions = (instruction*)0;
+    ArenaB.Used = 0;
+    size_t UpperBoundCodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; 
+    Alloc(&ArenaB, UpperBoundCodeSize);
+    uint8_t *Code = (uint8_t*)ArenaB.Base;
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
