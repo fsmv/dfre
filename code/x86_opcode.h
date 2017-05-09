@@ -84,7 +84,7 @@ struct instruction {
     reg Src;
     bool Int32;
     uint32_t Imm;
-    instruction *JumpDest;
+    size_t JumpDestIdx;
 };
 
 const uint8_t Op_MemReg[] =
@@ -304,17 +304,17 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
 // TODO Figure out what the actual max is, I think it's 6
 #define MAX_OPCODE_LEN 10
 
-#define R8(op, mode, reg) (*(Instructions++) = instruction{(mode), (op), ONE_REG, (reg), R_NONE, false, 0})
-#define R32(op, mode, reg) (*(Instructions++) = instruction{(mode), (op), ONE_REG, (reg), R_NONE, true, 0})
+#define R8(op, mode, reg) (instruction{(mode), (op), ONE_REG, (reg), R_NONE, false, 0, 0})
+#define R32(op, mode, reg) (instruction{(mode), (op), ONE_REG, (reg), R_NONE, true, 0, 0})
 
-#define RR8(op, mode, dest, src) (*(Instructions++) = instruction{(mode), (op), TWO_REG, (dest), (src), false, 0})
-#define RR32(op, mode, dest, src) (*(Instructions++) = instruction{(mode), (op), TWO_REG, (dest), (src), true, 0})
+#define RR8(op, mode, dest, src) (instruction{(mode), (op), TWO_REG, (dest), (src), false, 0, 0})
+#define RR32(op, mode, dest, src) (instruction{(mode), (op), TWO_REG, (dest), (src), true, 0, 0})
 
-#define RI8(op, mode, dest, imm) (*(Instructions++) = instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (imm)})
-#define RI32(op, mode, dest, imm) (*(Instructions++) = instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (imm)})
+#define RI8(op, mode, dest, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (imm), 0})
+#define RI32(op, mode, dest, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (imm), 0})
+#define J(op) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0})
+#define JD(op, dest) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, (dest)})
 
-#define J(op) Instructions; (*(Instructions++) = instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0})
-
-#define RET (*(Instructions++) = instruction{MODE_NONE, RET, NOARG, R_NONE, R_NONE, false, 0})
+#define RET (instruction{MODE_NONE, RET, NOARG, R_NONE, R_NONE, false, 0, 0})
 
 #endif

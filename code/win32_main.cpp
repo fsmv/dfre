@@ -233,11 +233,11 @@ int main() {
     PrintRegex(Regex);
 
     // Allocate storage for and then run each stage of the compiler in order
-    //mem_arena ReadArena = ArenaInit();
-    mem_arena WriteArena = ArenaInit();
+    mem_arena ArenaA = ArenaInit();
+    mem_arena ArenaB = ArenaInit();
 
     // Convert regex to NFA
-    nfa *NFA = RegexToNFA(Regex, &WriteArena);
+    nfa *NFA = RegexToNFA(Regex, &ArenaA);
 
     Print(Out, "\n--------------------- NFA ---------------------\n\n");
     PrintNFA(NFA);
@@ -245,16 +245,9 @@ int main() {
     // Note: this is all x86-specific after this point
     // TODO: ARM support
 
-    // Allocate storage for intermediate representation code gen
-    size_t InstructionsSize = sizeof(instruction) * 1024;
-    instruction *Instructions = (instruction*) VirtualAlloc(0, InstructionsSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (!Instructions) {
-        Print(Out, "Could not allocate space for Instructions\n");
-        return 1;
-    }
-
     // Convert the NFA into an intermediate code representation
-    size_t InstructionsGenerated = GenerateInstructions(NFA, Instructions);
+    size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
+    instruction *Instructions = (instruction *)ArenaB.Base;
 
     Print(Out, "\n----------------- Instructions ----------------\n\n");
     PrintInstructions(Instructions, InstructionsGenerated);

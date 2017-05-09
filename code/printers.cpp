@@ -123,7 +123,7 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
         case JUMP:
             Print(Out, "Op # ");
 
-            IntLen = WriteInt((uint32_t)(Instruction->JumpDest - Instructions), IntBuf);
+            IntLen = WriteInt((uint32_t)Instruction->JumpDestIdx, IntBuf);
             IntBuf[IntLen] = '\0';
             Print(Out, IntBuf);
             Print(Out, IntPaddingStr + IntLen);
