@@ -2,6 +2,7 @@
 // Provided under the MIT License: https://mit-license.org
 
 #include "mem_arena.h"
+#include "print.h"
 
 // TODO: Call GetSystemInfo to get page size and allocation granularity
 // 4k pages (you can get this with an api call)
@@ -17,7 +18,7 @@ mem_arena ArenaInit() {
     // TODO: Report error
     if (!Result.Base) {
         DWORD Code = GetLastError();
-        Print(Out, "%u\n", Code);
+        Print("%u\n", Code);
     }
     Assert(Result.Base != 0);
 
@@ -49,7 +50,7 @@ void Expand(mem_arena *Arena) {
             Assert(NewBase != 0);
             if (!NewBase) {
                 DWORD Code = GetLastError();
-                Print(Out, "%u\n", Code);
+                Print("%u\n", Code);
             }
 
             VirtualAlloc(NewBase, Arena->Committed, MEM_COMMIT, PAGE_READWRITE);

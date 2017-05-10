@@ -4,9 +4,10 @@
 #include "nfa.h"
 #include "x86_opcode.h"
 #include "mem_arena.h"
+#include "print.h"
 
 void PrintArena(const char *Name, mem_arena *Arena) {
-    Print(Out, "%s\n  Used: %u\n  Committed: %u\n  Reserved: %u\n\n",
+    Print("%s\n  Used: %u\n  Committed: %u\n  Reserved: %u\n\n",
           Name, Arena->Used, Arena->Committed, Arena->Reserved);
 }
 
@@ -15,24 +16,24 @@ void PrintRegex(char *Regex) {
     for (Ch = Regex; *Ch != '\0'; ++Ch) {}
     size_t Size = Ch - Regex;
 
-    Print(Out, "Size: %u Bytes\n\n", Size);
-    Print(Out, Regex);
-    Print(Out, "\n");
+    Print("Size: %u Bytes\n\n", Size);
+    Print(Regex);
+    Print("\n");
 }
 
 void PrintNFALabel(nfa_label Label) {
     switch (Label.Type) {
     case MATCH:
-        Print(Out, "'%c'", Label.A);
+        Print("'%c'", Label.A);
         break;
     case RANGE:
-        Print(Out, "'%c-%c'", Label.A, Label.B);
+        Print("'%c-%c'", Label.A, Label.B);
         break;
     case EPSILON:
-        Print(Out, "'Epsilon'", Label.A);
+        Print("'Epsilon'", Label.A);
         break;
     case DOT:
-        Print(Out, "'.'", Label.A);
+        Print("'.'", Label.A);
         break;
     }
 }
@@ -41,14 +42,14 @@ void PrintNFA(nfa *NFA) {
     size_t NFASize = sizeof(nfa) +
                      (NFA->NumArcListsAllocated - 1) * sizeof(nfa_arc_list);
 
-    Print(Out, "Size: %u Bytes\n", NFASize);
-    Print(Out, "Number of states: %u\n\n", NFA->NumStates);
+    Print("Size: %u Bytes\n", NFASize);
+    Print("Number of states: %u\n\n", NFA->NumStates);
 
     nfa_arc_list *ArcList = NFAFirstArcList(NFA);
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
-        Print(Out, "Arcs labeled ");
+        Print("Arcs labeled ");
         PrintNFALabel(ArcList->Label);
-        Print(Out, "; Num: %u\n", ArcList->NumTransitions);
+        Print("; Num: %u\n", ArcList->NumTransitions);
 
         for (size_t TransitionIdx = 0;
              TransitionIdx < ArcList->NumTransitions;
@@ -56,7 +57,7 @@ void PrintNFA(nfa *NFA) {
         {
             nfa_transition *Transition = &ArcList->Transitions[TransitionIdx];
 
-            Print(Out, "    %u => %u\n", Transition->From, Transition->To);
+            Print("    %u => %u\n", Transition->From, Transition->To);
         }
 
         ArcList = NFANextArcList(ArcList);
@@ -71,12 +72,12 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
             NumJumps += 1;
         }
     }
-    Print(Out, "Size: %u Bytes\n", InstructionsSize);
-    Print(Out, "Num Instructions: %u\n", NumInstructions);
-    Print(Out, "Num Jumps: %u\n\n", NumJumps);
+    Print("Size: %u Bytes\n", InstructionsSize);
+    Print("Num Instructions: %u\n", NumInstructions);
+    Print("Num Jumps: %u\n\n", NumJumps);
 
-    Print(Out, "   Op #   | Mode | Op  |     Arg1      | Arg2\n");
-    Print(Out, "-----------------------------------------------\n");
+    Print("   Op #   | Mode | Op  |     Arg1      | Arg2\n");
+    Print("-----------------------------------------------\n");
     //           12345678 | REG  | INC | Op # 12345678 |
     //           12345678 | REG  | INC | 12345678      | EAX
     //           12345678 | REG  | INC | EAX           |
@@ -92,89 +93,89 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
         size_t IntLen;
 
         // Op #
-        Print(Out, " ");
+        Print(" ");
         IntLen = WriteInt((uint32_t)Idx, IntBuf);
         IntBuf[IntLen] = '\0';
-        Print(Out, IntBuf);
-        Print(Out, IntPaddingStr + IntLen);
+        Print(IntBuf);
+        Print(IntPaddingStr + IntLen);
 
-        Print(Out, Separator);
+        Print(Separator);
 
         // Mode
         switch (Instruction->Mode) {
         case REG:
-            Print(Out, "REG ");
+            Print("REG ");
             break;
         case MEM:
-            Print(Out, "MEM ");
+            Print("MEM ");
             break;
         case MODE_NONE:
-            Print(Out, "J   ");
+            Print("J   ");
             break;
         }
 
-        Print(Out, Separator);
+        Print(Separator);
 
         // Op
         if (Instruction->Type == JUMP) {
-            Print(Out, jmp_strings[Instruction->Op]);
+            Print(jmp_strings[Instruction->Op]);
         } else {
-            Print(Out, op_strings[Instruction->Op]);
+            Print(op_strings[Instruction->Op]);
         }
 
-        Print(Out, Separator);
+        Print(Separator);
 
         // Args
         switch (Instruction->Type) {
         case JUMP:
-            Print(Out, "Op # ");
+            Print("Op # ");
 
             IntLen = WriteInt((uint32_t)Instruction->JumpDestIdx, IntBuf);
             IntBuf[IntLen] = '\0';
-            Print(Out, IntBuf);
-            Print(Out, IntPaddingStr + IntLen);
+            Print(IntBuf);
+            Print(IntPaddingStr + IntLen);
 
-            Print(Out, Separator);
+            Print(Separator);
             break;
         case ONE_REG:
-            Print(Out, reg_strings[Instruction->Dest]);
-            Print(Out, "         "); // 9
+            Print(reg_strings[Instruction->Dest]);
+            Print("         "); // 9
 
-            Print(Out, Separator);
+            Print(Separator);
             break;
         case TWO_REG:
-            Print(Out, reg_strings[Instruction->Dest]);
-            Print(Out, "         "); // 9
+            Print(reg_strings[Instruction->Dest]);
+            Print("         "); // 9
 
-            Print(Out, Separator);
+            Print(Separator);
 
-            Print(Out, reg_strings[Instruction->Src]);
+            Print(reg_strings[Instruction->Src]);
             break;
         case REG_IMM:
             IntLen = WriteInt(Instruction->Imm, IntBuf);
             IntBuf[IntLen] = '\0';
-            Print(Out, IntBuf);
-            Print(Out, IntPaddingStr + IntLen);
-            Print(Out, "     "); // 5
+            Print(IntBuf);
+            Print(IntPaddingStr + IntLen);
+            Print("     "); // 5
 
-            Print(Out, Separator);
+            Print(Separator);
 
-            Print(Out, reg_strings[Instruction->Dest]);
+            Print(reg_strings[Instruction->Dest]);
             break;
         }
 
-        Print(Out, "\n");
+        Print("\n");
     }
 }
 
 void PrintUnpackedOpcodes(opcode_unpacked *Opcodes, size_t NumOpcodes) {
-    Print(Out, "Size %u Bytes\n\n", sizeof(opcode_unpacked) * NumOpcodes);
-    Print(Out, "This is the instructions above in a struct that\n"
-               "has real x86 codes instead of our enums.\n");
+    Print("Size %u Bytes\n\n", sizeof(opcode_unpacked) * NumOpcodes);
+    Print("This is the instructions above in a struct that\n"
+          "has real x86 codes instead of our enums.\n");
 }
 
 void PrintByteCode(uint8_t *Code, size_t Size) {
-    Print(Out, "Size: %u Bytes\n\n", Size);
+    Print("Size: %u Bytes\n\n", Size);
     for (size_t i = 0; i < Size; ++i) {
         char IntStr[4];
         if (Code[i] < 0x10) {
@@ -187,9 +188,9 @@ void PrintByteCode(uint8_t *Code, size_t Size) {
         IntStr[2] = ' ';
         IntStr[3] = '\0';
 
-        Print(Out, IntStr);
+        Print(IntStr);
         if ((i + 1) % 16 == 0) {
-            Print(Out, "\n");
+            Print("\n");
         }
     }
 }

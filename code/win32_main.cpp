@@ -26,8 +26,9 @@
  */
 
 #include <stdint.h> // int32_t etc
-#include <stdarg.h> // varargs defines
+#define DFRE_WIN32
 
+// TODO: Remove me
 #define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -37,92 +38,9 @@
 // TODO: Linux version
 #include <windows.h>
 
-HANDLE Out;
-
-// Write an integer to a string in the specified base (not using CRT)
-size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
-    size_t CharCount = 0;
-
-    // Write the string backwards
-    do {
-        uint32_t digit = A % base;
-        if (digit < 10) {
-            *Str++ = '0' + (char) digit;
-        } else {
-            *Str++ = 'A' + (char) (digit - 10);
-        }
-        A /= base;
-        CharCount += 1;
-    } while (A > 0);
-
-    // Reverse the string
-    for (char *Start = Str - CharCount, *End = Str - 1;
-         Start < End;
-         ++Start, --End)
-    {
-        char Temp = *Start;
-        *Start = *End;
-        *End = Temp;
-    }
-
-    return CharCount;
-}
-
-// A printf clone with less features (not using CRT)
-uint32_t Print(HANDLE Out, const char *FormatString, ...) {
-    va_list args;
-    va_start(args, FormatString);
-
-    DWORD CharsWritten = 0;
-    DWORD Idx = 0;
-    for (; FormatString[Idx]; ++Idx) {
-        if (FormatString[Idx] == '%') {
-            switch (FormatString[Idx + 1]) {
-            case 's': {
-                // Write the string up to the percent
-                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
-
-                char *Str = va_arg(args, char*);
-                DWORD Len = 0;
-                for (; Str[Len]; ++Len) {}
-                WriteConsoleA(Out, Str, Len, &CharsWritten, 0);
-
-            } goto next;
-            case 'c': {
-                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
-
-                char Char = va_arg(args, char);
-                WriteConsoleA(Out, &Char, 1, &CharsWritten, 0);
-
-            } goto next;
-            case 'u': {
-                WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
-
-                uint32_t Int = va_arg(args, uint32_t);
-                char Buffer[10];
-                DWORD Len = (DWORD) WriteInt(Int, Buffer, 10);
-                WriteConsoleA(Out, Buffer, Len, &CharsWritten, 0);
-
-            } goto next;
-            next:
-                // Skip the %s
-                FormatString += Idx + 2;
-                Idx = 0;
-            default: ;
-            }
-        }
-    }
-
-    if (Idx != 0) {
-        WriteConsoleA(Out, FormatString, Idx, &CharsWritten, 0);
-    }
-
-    va_end(args);
-    return CharsWritten;
-}
-
 #include "win32_mem_arena.cpp"
 #include "printers.cpp"
+#include "print.h"
 
 size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
     va_list args;
@@ -225,11 +143,11 @@ int main() {
     ParseArgs(CommandLine, 2, &Regex, &Word);
 
     if (!Regex) { // if we didn't find an argument
-        Print(Out, "Usage: %s [regex] [search string (optional)]\n", ProgName);
+        Print("Usage: %s [regex] [search string (optional)]\n", ProgName);
         return 1;
     }
 
-    Print(Out, "-------------------- Regex --------------------\n\n");
+    Print("-------------------- Regex --------------------\n\n");
     PrintRegex(Regex);
 
     // Allocate storage for and then run each stage of the compiler in order
@@ -239,7 +157,7 @@ int main() {
     // Convert regex to NFA
     nfa *NFA = RegexToNFA(Regex, &ArenaA);
 
-    Print(Out, "\n--------------------- NFA ---------------------\n\n");
+    Print("\n--------------------- NFA ---------------------\n\n");
     PrintArena("Arena A", &ArenaA);
     PrintNFA(NFA);
 
@@ -250,7 +168,7 @@ int main() {
     size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
     instruction *Instructions = (instruction *)ArenaB.Base;
 
-    Print(Out, "\n----------------- Instructions ----------------\n\n");
+    Print("\n----------------- Instructions ----------------\n\n");
     PrintArena("Arena B", &ArenaB);
     PrintInstructions(Instructions, InstructionsGenerated);
 
@@ -264,7 +182,7 @@ int main() {
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
-    Print(Out, "\n----------------- x86 Unpacked ----------------\n\n");
+    Print("\n----------------- x86 Unpacked ----------------\n\n");
     PrintArena("Arena A", &ArenaA);
     PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
 
@@ -278,19 +196,19 @@ int main() {
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
-    Print(Out, "\n--------------------- Code --------------------\n\n");
+    Print("\n--------------------- Code --------------------\n\n");
     PrintArena("Arena B", &ArenaB);
     PrintByteCode(Code, CodeWritten);
 
     if (Word) {
         bool IsMatch = RunCode(Code, CodeWritten, Word);
 
-        Print(Out, "\n\n-------------------- Result -------------------\n\n");
-        Print(Out, "Search Word: %s\n", Word);
+        Print("\n\n-------------------- Result -------------------\n\n");
+        Print("Search Word: %s\n", Word);
         if (IsMatch) {
-            Print(Out, "Match\n");
+            Print("Match\n");
         }else{
-            Print(Out, "No Match\n");
+            Print("No Match\n");
         }
     }
 
