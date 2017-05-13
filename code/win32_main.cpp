@@ -32,15 +32,9 @@
 #define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-#include "parser.cpp"
-#include "x86_codegen.cpp"
-
 // TODO: Linux version
 #include <windows.h>
-
 #include "win32_mem_arena.cpp"
-#include "printers.cpp"
-#include "print.h"
 
 size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
     va_list args;
@@ -128,13 +122,17 @@ bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
     return (IsMatch != 0);
 }
 
-int main() {
+#include "tui.cpp"
+
+// Not using the CRT, for fun I guess. The binary is smaller!
+// The entry point. For people who search: main(int argc, char *argv[])
+void __stdcall mainCRTStartup() {
     // Get the file handle for the output stream
     Out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (!Out || Out == INVALID_HANDLE_VALUE) {
         // we can't print the message, so do a message box (plus boxes are fun)
         MessageBox(0, "Could not get print to standard output", 0, MB_OK | MB_ICONERROR);
-        return 1;
+        ExitProcess(1);
     }
 
     char *CommandLine = GetCommandLineA();
@@ -144,80 +142,10 @@ int main() {
 
     if (!Regex) { // if we didn't find an argument
         Print("Usage: %s [regex] [search string (optional)]\n", ProgName);
-        return 1;
+        ExitProcess(1);
     }
 
-    Print("-------------------- Regex --------------------\n\n");
-    PrintRegex(Regex);
+    CompileAndMatch(Regex, Word);
 
-    // Allocate storage for and then run each stage of the compiler in order
-    mem_arena ArenaA = ArenaInit();
-    mem_arena ArenaB = ArenaInit();
-
-    // Convert regex to NFA
-    nfa *NFA = RegexToNFA(Regex, &ArenaA);
-
-    Print("\n--------------------- NFA ---------------------\n\n");
-    PrintArena("Arena A", &ArenaA);
-    PrintNFA(NFA);
-
-    // Note: this is all x86-specific after this point
-    // TODO: ARM support
-
-    // Convert the NFA into an intermediate code representation
-    size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
-    instruction *Instructions = (instruction *)ArenaB.Base;
-
-    Print("\n----------------- Instructions ----------------\n\n");
-    PrintArena("Arena B", &ArenaB);
-    PrintInstructions(Instructions, InstructionsGenerated);
-
-    // Allocate storage for the unpacked x86 opcodes
-    NFA = (nfa*)0;
-    ArenaA.Used = 0;
-    Alloc(&ArenaA, sizeof(opcode_unpacked) * InstructionsGenerated);
-    opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*)ArenaA.Base;
-
-    // Turn the instructions into x86 op codes and resolve jump destinations
-    AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
-    // Note: no more return count here, this keeps the same number of instructions
-
-    Print("\n----------------- x86 Unpacked ----------------\n\n");
-    PrintArena("Arena A", &ArenaA);
-    PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
-
-    // Allocate storage for the actual byte code
-    // TODO: Make PackCode allocate a tighter amount of space
-    Instructions = (instruction*)0;
-    ArenaB.Used = 0;
-    size_t UpperBoundCodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; 
-    Alloc(&ArenaB, UpperBoundCodeSize);
-    uint8_t *Code = (uint8_t*)ArenaB.Base;
-
-    size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
-
-    Print("\n--------------------- Code --------------------\n\n");
-    PrintArena("Arena B", &ArenaB);
-    PrintByteCode(Code, CodeWritten);
-
-    if (Word) {
-        bool IsMatch = RunCode(Code, CodeWritten, Word);
-
-        Print("\n\n-------------------- Result -------------------\n\n");
-        Print("Search Word: %s\n", Word);
-        if (IsMatch) {
-            Print("Match\n");
-        }else{
-            Print("No Match\n");
-        }
-    }
-
-    return 0;
-}
-
-// Not using the CRT, for fun I guess. The binary is smaller!
-void __stdcall mainCRTStartup() {
-    int Result;
-    Result = main();
-    ExitProcess(Result);
+    ExitProcess(0);
 }
