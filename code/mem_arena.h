@@ -19,7 +19,19 @@ void MemCopy(void *Dest, void *Src, size_t NumBytes) {
 }
 
 mem_arena ArenaInit();
-size_t Alloc(mem_arena *Arena, size_t NumBytes);
+// Linearly increase the number of pages committed, (doesn't need a copy)
+// Double the amount reserved when needed (might need a copy)
+void Expand(mem_arena *Arena);
+
+size_t Alloc(mem_arena *Arena, size_t NumBytes) {
+    while (NumBytes + Arena->Used > Arena->Committed) {
+        Expand(Arena);
+    }
+
+    size_t Offset = Arena->Used;
+    Arena->Used += NumBytes;
+    return Offset;
+}
 
 #define MEM_ARENA_H_
 #endif

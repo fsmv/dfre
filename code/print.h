@@ -72,14 +72,14 @@ uint32_t Print(const char *FormatString, ...) {
                 CharsWritten += Write(FormatString, Idx);
 
                 char *Str = va_arg(args, char*);
-                DWORD Len = 0;
+                size_t Len = 0;
                 for (; Str[Len]; ++Len) {}
                 CharsWritten += Write(Str, Len);
             } goto next;
             case 'c': {
                 CharsWritten += Write(FormatString, Idx);
 
-                char Char = va_arg(args, char);
+                char Char = (char)va_arg(args, int);
                 CharsWritten += Write(&Char, 1);
             } goto next;
             case 'u': {
@@ -87,7 +87,7 @@ uint32_t Print(const char *FormatString, ...) {
 
                 uint32_t Int = va_arg(args, uint32_t);
                 char Buffer[10];
-                DWORD Len = (DWORD) WriteInt(Int, Buffer, 10);
+                size_t Len = WriteInt(Int, Buffer, 10);
                 CharsWritten += Write(Buffer, Len);
             } goto next;
             next: // Act like we're doing a new call skipping to after the '%.'

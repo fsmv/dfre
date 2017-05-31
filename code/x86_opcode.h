@@ -310,7 +310,7 @@ uint8_t *WriteOpcode(opcode_unpacked Opcode, uint8_t *Dest) {
 #define RR8(op, mode, dest, src) (instruction{(mode), (op), TWO_REG, (dest), (src), false, 0, 0})
 #define RR32(op, mode, dest, src) (instruction{(mode), (op), TWO_REG, (dest), (src), true, 0, 0})
 
-#define RI8(op, mode, dest, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (imm), 0})
+#define RI8(op, mode, dest, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (uint32_t)(imm), 0})
 #define RI32(op, mode, dest, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (imm), 0})
 #define J(op) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0})
 #define JD(op, dest) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, (dest)})

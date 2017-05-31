@@ -31,9 +31,6 @@ mem_arena ArenaInit() {
 }
 
 void Expand(mem_arena *Arena) {
-    // Linearly increase the number of pages committed, (doesn't need a copy)
-    // Double the amount reserved when needed (might need a copy)
-
     size_t AmountToCommit = PAGE_SIZE;
     size_t NewCommitted = Arena->Committed + AmountToCommit;
     if (NewCommitted > Arena->Reserved) {
@@ -64,14 +61,4 @@ void Expand(mem_arena *Arena) {
     // Commit the extra pages
     VirtualAlloc(Arena->Base + Arena->Committed, AmountToCommit, MEM_COMMIT, PAGE_READWRITE);
     Arena->Committed = NewCommitted;
-}
-
-size_t Alloc(mem_arena *Arena, size_t NumBytes) {
-    while (NumBytes + Arena->Used > Arena->Committed) {
-        Expand(Arena);
-    }
-
-    size_t Offset = Arena->Used;
-    Arena->Used += NumBytes;
-    return Offset;
 }

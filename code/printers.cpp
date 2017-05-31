@@ -193,4 +193,8 @@ void PrintByteCode(uint8_t *Code, size_t Size) {
             Print("\n");
         }
     }
+
+    if (Size % 16 != 0) {
+        Print("\n");
+    }
 }

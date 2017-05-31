@@ -32,7 +32,6 @@
 #define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-// TODO: Linux version
 #include <windows.h>
 #include "win32_mem_arena.cpp"
 

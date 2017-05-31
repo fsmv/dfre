@@ -13,6 +13,10 @@
 .text
     _start:
         xor ebp, ebp       // mark the base stack frame
+        pop esi
+        mov ecx,esp
+        push ecx
+        push esi
         call main
         mov ebx, eax       // move retern value into arg1 of syscall
         mov eax, SYS_EXIT  // calling exit()
