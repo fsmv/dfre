@@ -8,6 +8,15 @@
 #include "print.h"
 #include "mem_arena.h"
 
+extern "C" typedef uint32_t (*dfreMatch)(char *Str);
+
+bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
+    void *CodeLoc = LoadCode(Code, CodeWritten);
+    dfreMatch Match = (dfreMatch)CodeLoc;
+    uint32_t IsMatch = Match(WordPtr);
+    return (IsMatch != 0);
+}
+
 void CompileAndMatch(char *Regex, char *Word) {
     Print("-------------------- Regex --------------------\n\n");
     PrintRegex(Regex);

@@ -34,11 +34,11 @@ void NFASortArcList(nfa_arc_list *ArcList) {
 void GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
                                   mem_arena *Arena)
 {
-    NextInstr() = RI8(BT, REG, EBX, (uint8_t) DisableState); // Check if DisableState is active
+    NextInstr() = RI8(BT, REG, EAX, 0, (uint8_t) DisableState); // Check if DisableState is active
     size_t Jump = PeekIdx();
     NextInstr() = J(JNC); // skip the following if it's not active
 
-    NextInstr() = RI32(OR, REG, ECX, ActivateMask); // Remember to activate the activate states
+    NextInstr() = RI32(OR, REG, ECX, 0, ActivateMask); // Remember to activate the activate states
 
     Instr(Jump)->JumpDestIdx = PeekIdx();
 }
@@ -72,15 +72,17 @@ void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
     }
 }
 
-/**
- * NOTE(fsmv):
- *   eax = char *SearchString        [input]
- *   ebx = uint32_t ActiveStates     [output]
- *   ecx = uint32_t CurrentEnables   [clobbered]
- *   edx = uint32_t CurrentDisables  [clobbered]
- */
 size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
-    NextInstr() = RI32(MOV, REG, EBX, 1 << NFA_STARTSTATE); // Set state 0 as active
+    // ebx = char *CurrChar
+    // eax = uint32_t ActiveStates
+    // ecx = uint32_t CurrentEnables
+    // edx = uint32_t CurrentDisables
+
+    NextInstr() = R32(PUSH, REG, EBX, 0); // Callee save
+    NextInstr() = RR32(MOVR, MEM_DISP8, ESP, EBX, 4); // Get pointer to the search string off the stack
+    NextInstr() = RR32(MOV, REG, EBX, EAX, 0); // CurrChar in ebx
+
+    NextInstr() = RI32(MOV, REG, EAX, 0, 1 << NFA_STARTSTATE); // Set state 0 as active
 
     size_t Top = PeekIdx();
 
@@ -89,20 +91,20 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // Epsilon arcs, garunteed to be the first arc list
     nfa_arc_list *EpsilonArcs = NFAFirstArcList(NFA);
     Assert(EpsilonArcs->Label.Type == EPSILON);
-    NextInstr() = RR32(XOR, REG, ECX, ECX); // Clear states to enable
-    NextInstr() = RR32(MOV, REG, EDX, EBX); // Save current active states list
+    NextInstr() = RR32(XOR, REG, ECX, ECX, 0); // Clear states to enable
+    NextInstr() = RR32(MOV, REG, EDX, EAX, 0); // Save current active states list
     GenInstructionsArcList(EpsilonArcs, Arena);
-    NextInstr() = RR32(OR, REG, EBX, ECX);  // Enable the states to enable
-    NextInstr() = RR32(CMP, REG, EDX, EBX); // Check if active states has changed
+    NextInstr() = RR32(OR, REG, EAX, ECX, 0);  // Enable the states to enable
+    NextInstr() = RR32(CMP, REG, EDX, EAX, 0); // Check if active states has changed
     NextInstr() = JD(JNE, EpsilonLoopStart);
 
-    NextInstr() = RI8(CMP, MEM, EAX, 0); // If we're at the end, stop
+    NextInstr() = RI8(CMP, MEM, EBX, 0, 0); // If we're at the end, stop
     size_t JmpToEnd = PeekIdx();
     NextInstr() = J(JE);
 
-    NextInstr() = RR32(XOR, REG, ECX, ECX); // Clear states to enable
-    NextInstr() = RR32(MOV, REG, EDX, EBX); // Save current active states list
-    NextInstr() = R32(NOT, REG, EDX); // Remember to disable any currently active state
+    NextInstr() = RR32(XOR, REG, ECX, ECX, 0); // Clear states to enable
+    NextInstr() = RR32(MOV, REG, EDX, EAX, 0); // Save current active states list
+    NextInstr() = R32(NOT, REG, EDX, 0); // Remember to disable any currently active state
 
     nfa_arc_list *StartList = NFANextArcList(EpsilonArcs);
 
@@ -120,11 +122,11 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     nfa_arc_list *ArcList = StartList;
     for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type != RANGE) {
-            NextInstr() = RI8(CMP, MEM, EAX, ArcList->Label.A);
+            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
             size_t Jump1 = PeekIdx();
             NextInstr() = J(JL);
 
-            NextInstr() = RI8(CMP, MEM, EAX, ArcList->Label.B);
+            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.B);
             size_t Jump2 = PeekIdx();
             NextInstr() = J(JG);
 
@@ -147,7 +149,7 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     ArcList = StartList;
     for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type == MATCH) {
-            NextInstr() = RI8(CMP, MEM, EAX, ArcList->Label.A);
+            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
             size_t NextMatchCharJmp = PeekIdx();
             NextInstr() = J(JE);
             // do a linked list so we can find where to fill in the jump dests
@@ -199,100 +201,17 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
         LastMatchEndJmp = NextMatchEndJmp;
     }
 
-    NextInstr() = RR32(AND, REG, EBX, EDX); // Disabled the states to disable
-    NextInstr() = RR32(OR, REG, EBX, ECX);  // Enable the states to enable
+    NextInstr() = RR32(AND, REG, EAX, EDX, 0); // Disabled the states to disable
+    NextInstr() = RR32(OR, REG, EAX, ECX, 0);  // Enable the states to enable
 
-    NextInstr() = R32(INC, REG, EAX); // Next char in string
+    NextInstr() = R32(INC, REG, EBX, 0); // Next char in string
     NextInstr() = JD(JMP, Top);
 
     Instr(JmpToEnd)->JumpDestIdx = PeekIdx();
     // Return != 0 if accept state was active, 0 otherwise
-    NextInstr() = RI32(AND, REG, EBX, 1 << NFA_ACCEPTSTATE);
+    NextInstr() = RI32(AND, REG, EAX, 0, 1 << NFA_ACCEPTSTATE);
+    NextInstr() = R32(POP, REG, EBX, 0); // Callee save
     NextInstr() = RET;
 
     return PeekIdx();
-}
-
-int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size_t JumpDestIdx) {
-    size_t Start = 0, End = 0;
-    if (JumpDestIdx < JumpIdx) { // backwards
-        Start = JumpDestIdx;
-        End = JumpIdx + 1;
-    } else { // forwards (or equal)
-        Start = JumpIdx + 1;
-        End = JumpDestIdx;
-    }
-
-    size_t JumpOffset = 0;
-    for (size_t Idx = Start; Idx < End; ++Idx) {
-        JumpOffset += SizeOpcode(UnpackedOpcodes[Idx]);
-    }
-
-    int32_t Result = (int32_t) JumpOffset;
-    if (JumpDestIdx < JumpIdx) { // backwards
-        Result *= -1;
-    }
-    return Result;
-}
-
-void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opcode_unpacked *UnpackedOpcodes) {
-    opcode_unpacked *NextOpcode = UnpackedOpcodes;
-    for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
-        instruction *Inst = &Instructions[Idx];
-
-        switch(Inst->Type) {
-            case JUMP:
-            {
-                int32_t JumpDist = (int32_t) (Inst->JumpDestIdx - Idx);
-                // We don't know how big the ops between here and the dest are yet
-                int32_t JumpOffsetUpperBound = JumpDist * MAX_OPCODE_LEN;
-
-                if (JumpOffsetUpperBound < -128 || JumpOffsetUpperBound > 127) {
-                    *(NextOpcode++) = OpJump32(Inst->Op, 0);
-                } else {
-                    *(NextOpcode++) = OpJump8(Inst->Op, 0);
-                }
-            }break;
-            case ONE_REG:
-                *(NextOpcode++) = OpReg(Inst->Op, Inst->Mode, Inst->Dest, Inst->Int32);
-                break;
-            case TWO_REG:
-                *(NextOpcode++) = OpRegReg(Inst->Op, Inst->Mode, Inst->Dest, Inst->Src, Inst->Int32);
-                break;
-            case REG_IMM:
-                if (Inst->Int32) {
-                    *(NextOpcode++) = OpRegI32(Inst->Op, Inst->Mode, Inst->Dest, Inst->Imm);
-                } else {
-                    *(NextOpcode++) = OpRegI8(Inst->Op, Inst->Mode, Inst->Dest, (uint8_t) Inst->Imm);
-                }
-                break;
-            case NOARG:
-                *(NextOpcode++) = OpNoarg(Inst->Op);
-                break;
-        }
-    }
-
-    for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
-        instruction *Inst = &Instructions[Idx];
-        if (Inst->Type == JUMP) {
-            int32_t JumpOffset = ComputeJumpOffset(UnpackedOpcodes, Idx, Inst->JumpDestIdx);
-
-            if (UnpackedOpcodes[Idx].ImmCount == 1) {
-                Assert(-128 <= JumpOffset && JumpOffset <= 127);
-                UnpackedOpcodes[Idx] = OpJump8(Inst->Op, (int8_t) JumpOffset);
-            } else if (UnpackedOpcodes[Idx].ImmCount == 4) {
-                UnpackedOpcodes[Idx] = OpJump32(Inst->Op, JumpOffset);
-            }
-        }
-    }
-}
-
-size_t PackCode(opcode_unpacked *UnpackedOpcodes, size_t NumOpcodes, uint8_t *Code) {
-    uint8_t *CodeStart = Code;
-
-    for (size_t Idx = 0; Idx < NumOpcodes; ++Idx) {
-        Code = WriteOpcode(UnpackedOpcodes[Idx], Code);
-    }
-
-    return (size_t) (Code - CodeStart);
 }

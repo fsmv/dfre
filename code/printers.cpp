@@ -76,12 +76,12 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
     Print("Num Instructions: %u\n", NumInstructions);
     Print("Num Jumps: %u\n\n", NumJumps);
 
-    Print("   Op #   | Mode | Op  |     Arg1      | Arg2\n");
-    Print("-----------------------------------------------\n");
-    //           12345678 | REG  | INC | Op # 12345678 |
-    //           12345678 | REG  | INC | 12345678      | EAX
-    //           12345678 | REG  | INC | EAX           |
-    //           12345678 | REG  | INC | EAX           | EAX
+    Print("   Op #   | Mode |  Op  |      Arg1      | Arg2\n");
+    Print("------------------------------------------------\n");
+    //           12345678 | REG  | INC  | Op # 12345678  |
+    //           12345678 | REG  | INC  | 12345678       | EAX
+    //           12345678 | REG  | INC  | EAX            |
+    //           12345678 | REG  | INC  | EAX + 12345678 | EAX
 
     const size_t MaxIntLen = 8;
     const char IntPaddingStr[MaxIntLen+1] = "        ";
@@ -107,6 +107,8 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
             Print("REG ");
             break;
         case MEM:
+        case MEM_DISP8:
+        case MEM_DISP32:
             Print("MEM ");
             break;
         case MODE_NONE:
@@ -134,33 +136,71 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
             IntBuf[IntLen] = '\0';
             Print(IntBuf);
             Print(IntPaddingStr + IntLen);
+            Print(" ");
 
             Print(Separator);
             break;
+        case NOARG:
+            Print("              "); // 14
+            Print(Separator);
+            break;
         case ONE_REG:
-            Print(reg_strings[Instruction->Dest]);
-            Print("         "); // 9
+            if (Instruction->Mode == MEM_DISP8 ||
+                Instruction->Mode == MEM_DISP32)
+            {
+                Print(reg_strings[Instruction->Dest]);
+                Print(" + ");
+                IntLen = WriteInt(Instruction->Disp, IntBuf);
+                IntBuf[IntLen] = '\0';
+                Print(IntBuf);
+                Print(IntPaddingStr + IntLen);
+            } else {
+                Print(reg_strings[Instruction->Dest]);
+                Print("           "); // 11
+            }
 
             Print(Separator);
             break;
         case TWO_REG:
-            Print(reg_strings[Instruction->Dest]);
-            Print("         "); // 9
+            if (Instruction->Mode == MEM_DISP8 ||
+                Instruction->Mode == MEM_DISP32)
+            {
+                Print(reg_strings[Instruction->Dest]);
+                Print(" + ");
+                IntLen = WriteInt(Instruction->Disp, IntBuf);
+                IntBuf[IntLen] = '\0';
+                Print(IntBuf);
+                Print(IntPaddingStr + IntLen);
+            } else {
+                Print(reg_strings[Instruction->Dest]);
+                Print("           "); // 11
+            }
 
             Print(Separator);
 
             Print(reg_strings[Instruction->Src]);
             break;
         case REG_IMM:
+            if (Instruction->Mode == MEM_DISP8 ||
+                Instruction->Mode == MEM_DISP32)
+            {
+                Print(reg_strings[Instruction->Dest]);
+                Print(" + ");
+                IntLen = WriteInt(Instruction->Disp, IntBuf);
+                IntBuf[IntLen] = '\0';
+                Print(IntBuf);
+                Print(IntPaddingStr + IntLen);
+            } else {
+                Print(reg_strings[Instruction->Dest]);
+                Print("           "); // 11
+            }
+
+            Print(Separator);
+
             IntLen = WriteInt(Instruction->Imm, IntBuf);
             IntBuf[IntLen] = '\0';
             Print(IntBuf);
             Print(IntPaddingStr + IntLen);
-            Print("     "); // 5
-
-            Print(Separator);
-
-            Print(reg_strings[Instruction->Dest]);
             break;
         }
 
