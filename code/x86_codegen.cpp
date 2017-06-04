@@ -79,8 +79,7 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // edx = uint32_t CurrentDisables
 
     NextInstr() = R32(PUSH, REG, EBX, 0); // Callee save
-    NextInstr() = RR32(MOVR, MEM_DISP8, ESP, EBX, 4); // Get pointer to the search string off the stack
-    NextInstr() = RR32(MOV, REG, EBX, EAX, 0); // CurrChar in ebx
+    NextInstr() = RR32(MOVR, MEM_DISP8, ESP, EBX, 8); // Get pointer to the search string off the stack
 
     NextInstr() = RI32(MOV, REG, EAX, 0, 1 << NFA_STARTSTATE); // Set state 0 as active
 

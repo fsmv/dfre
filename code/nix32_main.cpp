@@ -39,8 +39,15 @@ extern "C" {
 #include <sys/mman.h> // for flag constants
 #include "nix32_mem_arena.cpp"
 
-bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
-    return false;
+void *LoadCode(uint8_t *Code, size_t CodeWritten) {
+    void *CodeExe = mmap(0, CodeWritten, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    // TODO: Report error
+    if (IsError(CodeExe)) {
+        Print("Could not reserve memory for code. errno = %u\n", Errno(CodeExe));
+    }
+    MemCopy(CodeExe, Code, CodeWritten);
+    mprotect(CodeExe, CodeWritten, PROT_EXEC | PROT_READ);
+    return CodeExe;
 }
 
 #include "tui.cpp"
@@ -52,6 +59,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    CompileAndMatch(argv[1], 0);
+    char *Word = 0;
+    if (argc > 2) {
+        Word = argv[2];
+    }
+
+    CompileAndMatch(argv[1], Word);
     return 0;
 }
