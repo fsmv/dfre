@@ -97,10 +97,12 @@ ParseArgs_ret:
 
 void *LoadCode(uint8_t *Code, size_t CodeWritten) {
     void *CodeExe = VirtualAlloc(0, CodeWritten, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-    uint8_t *CodeDest = (uint8_t*) CodeExe;
-    for (size_t i = 0; i < CodeWritten; ++i) {
-        *CodeDest++ = Code[i];
+    // TODO: Report error
+    if (!CodeExe) {
+        DWORD Code = GetLastError();
+        Print("%u\n", Code);
     }
+    MemCopy(CodeExe, Code, CodeWritten);
     VirtualProtect(CodeExe, CodeWritten, PAGE_EXECUTE_READ, 0);
     return CodeExe;
 }
