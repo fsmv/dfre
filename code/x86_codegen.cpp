@@ -120,7 +120,7 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // Range arcs
     nfa_arc_list *ArcList = StartList;
     for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
-        if (ArcList->Label.Type != RANGE) {
+        if (ArcList->Label.Type == RANGE) {
             NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
             size_t Jump1 = PeekIdx();
             NextInstr() = J(JL);
