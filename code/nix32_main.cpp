@@ -11,13 +11,17 @@
 #define IsError(err) ((uint32_t)(err) > (uint32_t)-4096)
 #define Errno(err) (-(int32_t)(err))
 // TODO: Remove me
-#define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 extern "C" {
     uint32_t syscall1(uint32_t call, void *arg1);
     uint32_t syscall2(uint32_t call, void *arg1, void *arg2);
     uint32_t syscall3(uint32_t call, void *arg1, void *arg2, void *arg3);
+
+    inline void exit(int retcode) {
+        syscall1(SYS_exit, (void*)retcode);
+        __builtin_unreachable();
+    }
 
     inline uint32_t write(int fd, const void *buf, size_t length) {
         return syscall3(SYS_write, (void*)fd, (void*)buf, (void*)length);
@@ -36,6 +40,15 @@ extern "C" {
                              (void*)prot);
     }
 }
+
+#include "print.h"
+
+inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
+    Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
+    exit(1);
+}
+#define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
+
 #include <sys/mman.h> // for flag constants
 #include "nix32_mem_arena.cpp"
 

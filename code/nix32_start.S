@@ -4,8 +4,7 @@
 // Thanks to Franc[e]sco (weeb.ddns.net) for his nolibc projects which I used
 // as an example for this.
 
-// True in both Linux and OSX (FreeBSD)
-#define SYS_EXIT 1
+#include <sys/syscall.h>
 
 .intel_syntax noprefix
 .globl _start
@@ -19,7 +18,7 @@
         push esi
         call main
         mov ebx, eax       // move retern value into arg1 of syscall
-        mov eax, SYS_EXIT  // calling exit()
+        mov eax, SYS_exit  // calling exit()
         int 0x80           // syscall
 
     syscall0:

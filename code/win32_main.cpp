@@ -29,10 +29,17 @@
 #define DFRE_WIN32
 
 // TODO: Remove me
-#define Assert(cond) if (!(cond)) { *((int*)0) = 0; }
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #include <windows.h>
+
+#include "print.h"
+inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
+    Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
+    ExitProcess(1);
+}
+#define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
+
 #include "win32_mem_arena.cpp"
 
 size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
