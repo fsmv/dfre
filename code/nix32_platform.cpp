@@ -6,12 +6,8 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 
-#define DFRE_NIX32
-
 #define IsError(err) ((uint32_t)(err) > (uint32_t)-4096)
 #define Errno(err) (-(int32_t)(err))
-// TODO: Remove me
-#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 extern "C" {
     uint32_t syscall1(uint32_t call, void *arg1);
@@ -41,13 +37,14 @@ extern "C" {
     }
 }
 
+// TODO: Maybe put Assert and ArrayLength in a utils header
 #include "print.h"
-
 inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
     Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
     exit(1);
 }
 #define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
+#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #include <sys/mman.h> // for flag constants
 #include "nix32_mem_arena.cpp"
@@ -61,22 +58,4 @@ void *LoadCode(uint8_t *Code, size_t CodeWritten) {
     MemCopy(CodeExe, Code, CodeWritten);
     mprotect(CodeExe, CodeWritten, PROT_EXEC | PROT_READ);
     return CodeExe;
-}
-
-#include "tui.cpp"
-
-extern "C"
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        Print("Usage: %s [regex] [search string (optional)]\n", argv[0]);
-        return 1;
-    }
-
-    char *Word = 0;
-    if (argc > 2) {
-        Word = argv[2];
-    }
-
-    CompileAndMatch(argv[1], Word);
-    return 0;
 }

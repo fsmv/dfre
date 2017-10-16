@@ -16,6 +16,9 @@
     #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
 #endif
 
+#define BASE10_MAX_INT_STR 11 + 1
+#define BASE16_MAX_INT_STR  8 + 1
+
 // Write an integer to a string in the specified base (not using CRT)
 size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
     size_t CharCount = 0;

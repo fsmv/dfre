@@ -1,7 +1,10 @@
 #!/bin/bash
 
-CompilerOptions="-nostdlib "
+CompilerOptions="-DDFRE_NIX32 "
+CompilerOptions+="-nostdlib "
 CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
+CompilerOptions+="-fno-stack-protector "
 CompilerOptions+="-m32 "
 
-g++ ../code/nix32_start.S ../code/nix32_main.cpp $CompilerOptions -o re
+g++ ../code/nix32_start.S ../code/tui.cpp $CompilerOptions -o re
+g++ ../code/nix32_start.S ../code/tests/tester.cpp -I../code $CompilerOptions -o test_re

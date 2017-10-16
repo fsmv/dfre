@@ -1,6 +1,12 @@
 // Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
+#if defined(DFRE_WIN32)
+    #include "win32_platform.cpp"
+#elif defined(DFRE_NIX32)
+    #include "nix32_platform.cpp"
+#endif
+
 #include "parser.cpp"
 #include "x86_codegen.cpp"
 #include "printers.cpp"
@@ -82,4 +88,20 @@ void CompileAndMatch(char *Regex, char *Word) {
             Print("No Match\n");
         }
     }
+}
+
+extern "C"
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        Print("Usage: %s [regex] [search string (optional)]\n", argv[0]);
+        return 1;
+    }
+
+    char *Word = 0;
+    if (argc > 2) {
+        Word = argv[2];
+    }
+
+    CompileAndMatch(argv[1], Word);
+    return 0;
 }

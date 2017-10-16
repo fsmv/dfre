@@ -26,30 +26,38 @@
  */
 
 #include <stdint.h> // int32_t etc
-#define DFRE_WIN32
-
-// TODO: Remove me
-#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
-
 #include <windows.h>
 
+// TODO: Maybe put Assert and ArrayLength in a utils header
 #include "print.h"
 inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
     Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
     ExitProcess(1);
 }
 #define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
+#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #include "win32_mem_arena.cpp"
 
-size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
-    va_list args;
-    va_start(args, NumExpecting);
-    char **Arg;
+void *LoadCode(uint8_t *Code, size_t CodeWritten) {
+    void *CodeExe = VirtualAlloc(0, CodeWritten, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    // TODO: Report error
+    if (!CodeExe) {
+        DWORD Code = GetLastError();
+        Print("%u\n", Code);
+    }
+    MemCopy(CodeExe, Code, CodeWritten);
+    VirtualProtect(CodeExe, CodeWritten, PAGE_EXECUTE_READ, 0);
+    return CodeExe;
+}
 
-    size_t Count = 0;
+#define MaxNumArgs 10
+static char *Argv[MaxNumArgs];
+char **ParseArgs(char *CommandLine, size_t *NumArgs) {
+    *NumArgs = 0;
     // Program name
     char *Curr = CommandLine;
+    Argv[(*NumArgs)++] = Curr;
     if (*Curr == '"') { // Quoted program name
         Curr += 1;
         for (; *Curr; ++Curr) {
@@ -66,19 +74,15 @@ size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
         }
     }
     if (*Curr == '\0') {
-        goto ParseArgs_ret;
+        return Argv;
     }
     *Curr++ = '\0';
     // Skip any extra spaces
     for (; *Curr && *Curr == ' '; ++Curr) {}
 
     // Arguments
-    while (*Curr) {
-        if (Count < NumExpecting) {
-            Arg = va_arg(args, char**);
-            *Arg = Curr;
-        }
-        Count += 1;
+    while (*Curr && *NumArgs < MaxNumArgs) {
+        Argv[(*NumArgs)++] = Curr;
         // Find the end of the arg
         for (; *Curr; ++Curr) {
             if (*Curr == ' ' && *(Curr - 1) != '\\') {
@@ -90,31 +94,17 @@ size_t ParseArgs(char *CommandLine, size_t NumExpecting, ...) {
             // Skip any extra spaces
             for (; *Curr && *Curr == ' '; ++Curr) {}
         }
+        if (Argv[*NumArgs-1] == Curr) {
+            // The last arg was empty
+            *NumArgs -= 1;
+        }
     }
 
-ParseArgs_ret:
-    // Set any unfilled args to 0
-    for (size_t Idx = Count; Idx < NumExpecting; ++Idx) {
-        Arg = va_arg(args, char**);
-        *Arg = 0;
-    }
-    va_end(args);
-    return Count;
+    return Argv;
 }
 
-void *LoadCode(uint8_t *Code, size_t CodeWritten) {
-    void *CodeExe = VirtualAlloc(0, CodeWritten, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-    // TODO: Report error
-    if (!CodeExe) {
-        DWORD Code = GetLastError();
-        Print("%u\n", Code);
-    }
-    MemCopy(CodeExe, Code, CodeWritten);
-    VirtualProtect(CodeExe, CodeWritten, PAGE_EXECUTE_READ, 0);
-    return CodeExe;
-}
-
-#include "tui.cpp"
+extern "C"
+int main(int argc, char *argv[]);
 
 // Not using the CRT, for fun I guess. The binary is smaller!
 // The entry point. For people who search: main(int argc, char *argv[])
@@ -127,17 +117,8 @@ void __stdcall mainCRTStartup() {
         ExitProcess(1);
     }
 
-    char *CommandLine = GetCommandLineA();
-    char *ProgName = CommandLine;
-    char *Regex, *Word;
-    ParseArgs(CommandLine, 2, &Regex, &Word);
-
-    if (!Regex) { // if we didn't find an argument
-        Print("Usage: %s [regex] [search string (optional)]\n", ProgName);
-        ExitProcess(1);
-    }
-
-    CompileAndMatch(Regex, Word);
-
-    ExitProcess(0);
+    size_t argc;
+    char **argv = ParseArgs(GetCommandLineA(), &argc);
+    int ExitCode = main((int)argc, argv);
+    ExitProcess(ExitCode);
 }

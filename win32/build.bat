@@ -1,13 +1,18 @@
 @echo off
 
 set EXEName=re.exe
-set SRC=..\code\win32_main.cpp
+set SRC=..\code\tui.cpp
 set WindowsLibs=kernel32.lib user32.lib
+
+set TestEXEName=test_re.exe
+set TestSRC=..\code\tests\tester.cpp
 
 rem -------------------------------------
 
+set CompilerOptions=-DDFRE_WIN32
+
 rem Disables extra printing
-set CompilerOptions=-nologo
+set CompilerOptions=%CompilerOptions% -nologo
 
 rem Disables checking for minimal rebuild
 set CompilerOptions=%CompilerOptions% -Gm-
@@ -29,7 +34,8 @@ set CompilerOptions=%CompilerOptions% -FC
 
 rem Enable all warnings and treat warnings as errors
 rem Disables unreferenced formal parameter warning
-set CompilerOptions=%CompilerOptions% /wd4100 -W4 -WX
+rem Disables constant conditional expression warning (for do { } while(0) macros)
+set CompilerOptions=%CompilerOptions% /wd4100 /wd4127 -W4 -WX
 
 rem Put debug info in the obj file (don't make pdb files)
 set CompilerOptions=%CompilerOptions% -Z7
@@ -55,3 +61,4 @@ set LinkerOptions=%LinkerOptions% %WindowsLibs%
 rem -------------------------------------
 
 cl.exe %CompilerOptions% %SRC% -Fe%EXEName% /link %LinkerOptions%
+cl.exe %CompilerOptions% %TestSRC% /I ..\code\ -Fe%TestEXEName% /link %LinkerOptions%

@@ -64,6 +64,107 @@ void PrintNFA(nfa *NFA) {
     }
 }
 
+
+// Prints one instruction with no new line at the end. Examples:
+//
+// [REG] AND  Op # 12345678
+// [REG] OR   12345678      , EAX
+// [MEM] INC  EAX
+// [REG] ADD  EAX + 12345678, EAX
+void PrintInstruction(instruction *Instruction) {
+    // Mode
+    switch (Instruction->Mode) {
+    case REG:
+        Print("[REG");
+        break;
+    case MEM:
+    case MEM_DISP8:
+    case MEM_DISP32:
+        Print("[MEM");
+        break;
+    case MODE_NONE:
+        Print("[JMP");
+        break;
+    }
+    // Bit-width
+    if (Instruction->Is16) {
+        Print(",32] ");
+    } else {
+        Print(", 8] ");
+    }
+    // Op
+    if (Instruction->Type == JUMP) {
+        Print(jmp_strings[Instruction->Op]);
+    } else {
+        Print(op_strings[Instruction->Op]);
+    }
+    Print(" ");
+    // Args
+    char IntBuf[BASE16_MAX_INT_STR];
+    size_t IntLen;
+    switch (Instruction->Type) {
+    case JUMP:
+        Print("Op # ");
+
+        IntLen = WriteInt((uint32_t)Instruction->JumpDestIdx, IntBuf);
+        IntBuf[IntLen] = '\0';
+        Print(IntBuf);
+        break;
+    case NOARG:
+        break;
+    case ONE_REG:
+        if (Instruction->Mode == MEM_DISP8 ||
+            Instruction->Mode == MEM_DISP32)
+        {
+            Print(reg_strings[Instruction->Dest]);
+            Print(" + ");
+            IntLen = WriteInt(Instruction->Disp, IntBuf);
+            IntBuf[IntLen] = '\0';
+            Print(IntBuf);
+        } else {
+            Print(reg_strings[Instruction->Dest]);
+        }
+
+        break;
+    case TWO_REG:
+        if (Instruction->Mode == MEM_DISP8 ||
+            Instruction->Mode == MEM_DISP32)
+        {
+            Print(reg_strings[Instruction->Dest]);
+            Print(" + ");
+            IntLen = WriteInt(Instruction->Disp, IntBuf);
+            IntBuf[IntLen] = '\0';
+            Print(IntBuf);
+        } else {
+            Print(reg_strings[Instruction->Dest]);
+        }
+
+        Print(", ");
+
+        Print(reg_strings[Instruction->Src]);
+        break;
+    case REG_IMM:
+        if (Instruction->Mode == MEM_DISP8 ||
+            Instruction->Mode == MEM_DISP32)
+        {
+            Print(reg_strings[Instruction->Dest]);
+            Print(" + ");
+            IntLen = WriteInt(Instruction->Disp, IntBuf);
+            IntBuf[IntLen] = '\0';
+            Print(IntBuf);
+        } else {
+            Print(reg_strings[Instruction->Dest]);
+        }
+
+        Print(", ");
+
+        IntLen = WriteInt(Instruction->Imm, IntBuf);
+        IntBuf[IntLen] = '\0';
+        Print(IntBuf);
+        break;
+    }
+}
+
 void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
     size_t InstructionsSize = sizeof(instruction) * NumInstructions;
     size_t NumJumps = 0;
@@ -76,134 +177,21 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
     Print("Num Instructions: %u\n", NumInstructions);
     Print("Num Jumps: %u\n\n", NumJumps);
 
-    Print("   Op #   | Mode |  Op  |      Arg1      | Arg2\n");
-    Print("------------------------------------------------\n");
-    //           12345678 | REG  | INC  | Op # 12345678  |
-    //           12345678 | REG  | INC  | 12345678       | EAX
-    //           12345678 | REG  | INC  | EAX            |
-    //           12345678 | REG  | INC  | EAX + 12345678 | EAX
-
-    const size_t MaxIntLen = 8;
-    const char IntPaddingStr[MaxIntLen+1] = "        ";
-    const char *Separator = " | ";
+    // TODO: Add padding and hex ints to Print
+    const char IntPaddingStr[BASE16_MAX_INT_STR] = "        ";
 
     for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
         instruction *Instruction = &Instructions[Idx];
-        char IntBuf[MaxIntLen+1];
+        char IntBuf[BASE16_MAX_INT_STR];
         size_t IntLen;
 
         // Op #
-        Print(" ");
         IntLen = WriteInt((uint32_t)Idx, IntBuf);
         IntBuf[IntLen] = '\0';
         Print(IntBuf);
         Print(IntPaddingStr + IntLen);
 
-        Print(Separator);
-
-        // Mode
-        switch (Instruction->Mode) {
-        case REG:
-            Print("REG ");
-            break;
-        case MEM:
-        case MEM_DISP8:
-        case MEM_DISP32:
-            Print("MEM ");
-            break;
-        case MODE_NONE:
-            Print("J   ");
-            break;
-        }
-
-        Print(Separator);
-
-        // Op
-        if (Instruction->Type == JUMP) {
-            Print(jmp_strings[Instruction->Op]);
-        } else {
-            Print(op_strings[Instruction->Op]);
-        }
-
-        Print(Separator);
-
-        // Args
-        switch (Instruction->Type) {
-        case JUMP:
-            Print("Op # ");
-
-            IntLen = WriteInt((uint32_t)Instruction->JumpDestIdx, IntBuf);
-            IntBuf[IntLen] = '\0';
-            Print(IntBuf);
-            Print(IntPaddingStr + IntLen);
-            Print(" ");
-
-            Print(Separator);
-            break;
-        case NOARG:
-            Print("              "); // 14
-            Print(Separator);
-            break;
-        case ONE_REG:
-            if (Instruction->Mode == MEM_DISP8 ||
-                Instruction->Mode == MEM_DISP32)
-            {
-                Print(reg_strings[Instruction->Dest]);
-                Print(" + ");
-                IntLen = WriteInt(Instruction->Disp, IntBuf);
-                IntBuf[IntLen] = '\0';
-                Print(IntBuf);
-                Print(IntPaddingStr + IntLen);
-            } else {
-                Print(reg_strings[Instruction->Dest]);
-                Print("           "); // 11
-            }
-
-            Print(Separator);
-            break;
-        case TWO_REG:
-            if (Instruction->Mode == MEM_DISP8 ||
-                Instruction->Mode == MEM_DISP32)
-            {
-                Print(reg_strings[Instruction->Dest]);
-                Print(" + ");
-                IntLen = WriteInt(Instruction->Disp, IntBuf);
-                IntBuf[IntLen] = '\0';
-                Print(IntBuf);
-                Print(IntPaddingStr + IntLen);
-            } else {
-                Print(reg_strings[Instruction->Dest]);
-                Print("           "); // 11
-            }
-
-            Print(Separator);
-
-            Print(reg_strings[Instruction->Src]);
-            break;
-        case REG_IMM:
-            if (Instruction->Mode == MEM_DISP8 ||
-                Instruction->Mode == MEM_DISP32)
-            {
-                Print(reg_strings[Instruction->Dest]);
-                Print(" + ");
-                IntLen = WriteInt(Instruction->Disp, IntBuf);
-                IntBuf[IntLen] = '\0';
-                Print(IntBuf);
-                Print(IntPaddingStr + IntLen);
-            } else {
-                Print(reg_strings[Instruction->Dest]);
-                Print("           "); // 11
-            }
-
-            Print(Separator);
-
-            IntLen = WriteInt(Instruction->Imm, IntBuf);
-            IntBuf[IntLen] = '\0';
-            Print(IntBuf);
-            Print(IntPaddingStr + IntLen);
-            break;
-        }
-
+        PrintInstruction(Instruction);
         Print("\n");
     }
 }
@@ -214,8 +202,10 @@ void PrintUnpackedOpcodes(opcode_unpacked *Opcodes, size_t NumOpcodes) {
           "has real x86 codes instead of our enums.\n");
 }
 
-void PrintByteCode(uint8_t *Code, size_t Size) {
-    Print("Size: %u Bytes\n\n", Size);
+void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true) {
+    if (PrintSize) {
+        Print("Size: %u Bytes\n\n", Size);
+    }
     for (size_t i = 0; i < Size; ++i) {
         char IntStr[4];
         if (Code[i] < 0x10) {
