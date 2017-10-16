@@ -52,51 +52,33 @@ void *LoadCode(uint8_t *Code, size_t CodeWritten) {
 static char *Argv[MaxNumArgs];
 char **ParseArgs(char *CommandLine, size_t *NumArgs) {
     *NumArgs = 0;
-    // Program name
     char *Curr = CommandLine;
-    Argv[(*NumArgs)++] = Curr;
-    if (*Curr == '"') { // Quoted program name
-        Curr += 1;
-        for (; *Curr; ++Curr) {
-            if (*Curr == '"') {
-                Curr += 1;
-                break;
-            }
-        }
-    } else { // Not quoted
-        for (; *Curr; ++Curr) {
-            if (*Curr == ' ' && *(Curr - 1) != '\\') {
-                break;
-            }
-        }
-    }
-    if (*Curr == '\0') {
-        return Argv;
-    }
-    *Curr++ = '\0';
-    // Skip any extra spaces
-    for (; *Curr && *Curr == ' '; ++Curr) {}
-
-    // Arguments
     while (*Curr && *NumArgs < MaxNumArgs) {
+        // Check if it starts with a quote
+        bool Quoted = false;
+        if (*Curr == '"') {
+            Curr += 1;
+            Quoted = true;
+        }
+        // Save the pending arg start (without the quote if one was there)
         Argv[(*NumArgs)++] = Curr;
         // Find the end of the arg
         for (; *Curr; ++Curr) {
-            if (*Curr == ' ' && *(Curr - 1) != '\\') {
+            bool FoundEndChar = (!Quoted && *Curr == ' ') || (Quoted && *Curr == '"');
+            if (FoundEndChar && *(Curr - 1) != '\\') {
                 break;
             }
         }
-        if (*Curr == ' ') {
+        // Fill in \0 at the end of the arg if needed
+        if (*Curr == ' ' || *Curr == '"') {
             *Curr++ = '\0';
             // Skip any extra spaces
             for (; *Curr && *Curr == ' '; ++Curr) {}
         }
-        if (Argv[*NumArgs-1] == Curr) {
-            // The last arg was empty
+        if (Argv[*NumArgs-1] == Curr) { // The pending arg was empty
             *NumArgs -= 1;
         }
     }
-
     return Argv;
 }
 
@@ -116,6 +98,7 @@ void __stdcall mainCRTStartup() {
 
     size_t argc;
     char **argv = ParseArgs(GetCommandLineA(), &argc);
+    Print("%s\n", argv[0]);
     int ExitCode = main((int)argc, argv);
     ExitProcess(ExitCode);
 }
