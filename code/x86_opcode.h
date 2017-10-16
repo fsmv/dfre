@@ -1,8 +1,7 @@
 // Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-#ifndef X86_OPCODE_H
-#define X86_OPCODE_H
+#ifndef X86_OPCODE_H_
 
 struct opcode_unpacked {
     // uint8_t Prefixes[4]; // not used
@@ -177,6 +176,9 @@ opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement
         Result.Opcode[1] = Op_ShortRegOnly[Op] + (uint8_t)Reg;
         Result.HasModRM = false;
     } else {
+        if (Mode == REG && !is16) {
+            Assert(Reg != ESI && Reg != EDI && Reg != EBP && Reg != ESP);
+        }
         Result.Opcode[1] = Op_MemReg[Op] + (is16 ? 1 : 0);
 
         Result.ModRM |= Mode;
@@ -206,6 +208,13 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     Assert(Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV || Op == MOVR);
 
     opcode_unpacked Result = {};
+
+    if (!is16) {
+        Assert(DestReg != ESI && DestReg != EDI && DestReg != EBP && DestReg != ESP);
+        if (Mode != REG) {
+            Assert(SrcReg != ESI && SrcReg != EDI && SrcReg != EBP && SrcReg != ESP);
+        }
+    }
 
     Result.Opcode[1] = Op_MemReg[Op] + (is16 ? 1 : 0);
 
@@ -455,4 +464,5 @@ size_t PackCode(opcode_unpacked *Opcodes, size_t NumOpcodes, uint8_t *Dest) {
 
 #define RET (instruction{MODE_NONE, RET, NOARG, R_NONE, R_NONE, false, 0, 0, 0})
 
+#define X86_OPCODE_H_
 #endif

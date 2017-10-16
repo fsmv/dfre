@@ -2,9 +2,12 @@
     #include "win32_platform.cpp"
 #elif defined(DFRE_NIX32)
     #include "nix32_platform.cpp"
+#else
+    #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
 #endif
 
 #include "print.h"
+#include "utils.h"
 
 static bool failed = false;
 

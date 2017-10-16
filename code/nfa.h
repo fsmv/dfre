@@ -1,8 +1,7 @@
 // Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-#ifndef NFA_H
-#define NFA_H
+#ifndef NFA_H_
 
 // +---------------------------------------------------+
 // | Read struct documentation bottom to top because C |
@@ -143,4 +142,5 @@ nfa_arc_list *NFANextArcList(nfa_arc_list *ArcList) {
 #define NFA_STARTSTATE  ((uint32_t) 1)
 #define NFA_ACCEPTSTATE ((uint32_t) 0)
 
+#define NFA_H_
 #endif

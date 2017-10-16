@@ -5,16 +5,22 @@
     #include "win32_platform.cpp"
 #elif defined(DFRE_NIX32)
     #include "nix32_platform.cpp"
+#else
+    #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
 #endif
 
 #include "parser.cpp"
 #include "x86_codegen.cpp"
 #include "printers.cpp"
 
+#include "utils.h"
 #include "print.h"
 #include "mem_arena.h"
 
+// Function pointer type for calling the compiled regex code
 extern "C" typedef uint32_t (*dfreMatch)(char *Str);
+
+void *LoadCode(uint8_t *Code, size_t CodeWritten);
 
 bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
     void *CodeLoc = LoadCode(Code, CodeWritten);

@@ -28,14 +28,11 @@
 #include <stdint.h> // int32_t etc
 #include <windows.h>
 
-// TODO: Maybe put Assert and ArrayLength in a utils header
-#include "print.h"
-inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
-    Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
-    ExitProcess(1);
-}
-#define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
-#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
+static HANDLE Out; // Initialized in mainCRTStartup()
+static DWORD TempCharsWritten;
+#define Write(str, len) (WriteConsoleA(Out, (str), (DWORD)(len), &TempCharsWritten, 0), \
+                         (uint32_t)TempCharsWritten)
+#define Exit(code) ExitProcess((code))
 
 #include "win32_mem_arena.cpp"
 

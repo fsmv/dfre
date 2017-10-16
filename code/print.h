@@ -4,16 +4,8 @@
 #ifndef PRINT_H_
 #include <stdarg.h> // varargs defines
 
-#if defined(DFRE_WIN32)
-    static HANDLE Out; // Assigned at the top of win32_main.cpp:main()
-    static DWORD TempCharsWritten;
-
-    #define Write(str, len) (WriteConsoleA(Out, (str), (DWORD)(len), &TempCharsWritten, 0), \
-                             (uint32_t)TempCharsWritten)
-#elif defined(DFRE_NIX32)
-    #define Write(str, len) write(1, (str), (len))
-#else
-    #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
+#if !defined(Write)
+    #error "Write(char *str, int len) macro must be defined (in the *_platform file)"
 #endif
 
 #define BASE10_MAX_INT_STR 11 + 1

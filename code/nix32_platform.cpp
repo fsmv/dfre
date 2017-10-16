@@ -37,14 +37,8 @@ extern "C" {
     }
 }
 
-// TODO: Maybe put Assert and ArrayLength in a utils header
-#include "print.h"
-inline void _AssertFailed(int LineNum, const char *File, const char *Condition) {
-    Print("ERROR: Assertion failed; %s:%u  Assert(%s)\n", File, LineNum, Condition);
-    exit(1);
-}
-#define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
-#define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define Write(str, len) write(1, (str), (len))
+#define Exit(code) exit((code))
 
 #include <sys/mman.h> // for flag constants
 #include "nix32_mem_arena.cpp"

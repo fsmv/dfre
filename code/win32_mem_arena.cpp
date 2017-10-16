@@ -3,6 +3,7 @@
 
 #include "mem_arena.h"
 #include "print.h"
+#include "utils.h"
 
 // TODO: Call GetSystemInfo to get page size and allocation granularity
 // 4k pages (you can get this with an api call)

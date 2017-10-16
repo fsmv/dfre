@@ -56,7 +56,7 @@ void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
         nfa_transition *Arc = &ArcList->Transitions[TransitionIdx];
 
         if (Arc->From != DisableState) {
-            if (DisableState != -1) {
+            if (DisableState != (uint32_t)-1) {
                 GenInstructionsTransitionSet(DisableState, ActivateMask, Arena);
             }
 
@@ -67,7 +67,7 @@ void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
         }
     }
 
-    if (DisableState != -1) {
+    if (DisableState != (uint32_t)-1) {
         GenInstructionsTransitionSet(DisableState, ActivateMask, Arena);
     }
 }

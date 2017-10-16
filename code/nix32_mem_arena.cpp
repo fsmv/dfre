@@ -3,6 +3,7 @@
 
 #include "mem_arena.h"
 #include "print.h"
+#include "utils.h"
 
 // TODO: call the syscall to get page size
 #define PAGE_SIZE (4 * 1024)
