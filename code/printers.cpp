@@ -65,6 +65,15 @@ void PrintNFA(nfa *NFA) {
 }
 
 
+inline void printFirstArg(instruction *Instruction) {
+    const char *RegName = reg_strings[Instruction->Dest];
+    if (Instruction->Mode == MEM_DISP8 || Instruction->Mode == MEM_DISP32) {
+        Print("%s + %x", RegName, (uint32_t)Instruction->Disp);
+    } else {
+        Print(RegName);
+    }
+}
+
 // Prints one instruction with no new line at the end. Examples:
 //
 // [REG] AND  Op # 12345678
@@ -104,63 +113,20 @@ void PrintInstruction(instruction *Instruction) {
     size_t IntLen;
     switch (Instruction->Type) {
     case JUMP:
-        Print("Op # ");
-
-        IntLen = WriteInt((uint32_t)Instruction->JumpDestIdx, IntBuf);
-        IntBuf[IntLen] = '\0';
-        Print(IntBuf);
+        Print("Op # %x", (uint32_t)Instruction->JumpDestIdx);
         break;
     case NOARG:
         break;
     case ONE_REG:
-        if (Instruction->Mode == MEM_DISP8 ||
-            Instruction->Mode == MEM_DISP32)
-        {
-            Print(reg_strings[Instruction->Dest]);
-            Print(" + ");
-            IntLen = WriteInt(Instruction->Disp, IntBuf);
-            IntBuf[IntLen] = '\0';
-            Print(IntBuf);
-        } else {
-            Print(reg_strings[Instruction->Dest]);
-        }
-
+        printFirstArg(Instruction);
         break;
     case TWO_REG:
-        if (Instruction->Mode == MEM_DISP8 ||
-            Instruction->Mode == MEM_DISP32)
-        {
-            Print(reg_strings[Instruction->Dest]);
-            Print(" + ");
-            IntLen = WriteInt(Instruction->Disp, IntBuf);
-            IntBuf[IntLen] = '\0';
-            Print(IntBuf);
-        } else {
-            Print(reg_strings[Instruction->Dest]);
-        }
-
-        Print(", ");
-
-        Print(reg_strings[Instruction->Src]);
+        printFirstArg(Instruction);
+        Print(", %s", reg_strings[Instruction->Src]);
         break;
     case REG_IMM:
-        if (Instruction->Mode == MEM_DISP8 ||
-            Instruction->Mode == MEM_DISP32)
-        {
-            Print(reg_strings[Instruction->Dest]);
-            Print(" + ");
-            IntLen = WriteInt(Instruction->Disp, IntBuf);
-            IntBuf[IntLen] = '\0';
-            Print(IntBuf);
-        } else {
-            Print(reg_strings[Instruction->Dest]);
-        }
-
-        Print(", ");
-
-        IntLen = WriteInt(Instruction->Imm, IntBuf);
-        IntBuf[IntLen] = '\0';
-        Print(IntBuf);
+        printFirstArg(Instruction);
+        Print(", %x", (uint32_t)Instruction->Imm);
         break;
     }
 }
@@ -178,7 +144,7 @@ void PrintInstructions(instruction *Instructions, size_t NumInstructions) {
     Print("Num Jumps: %u\n\n", NumJumps);
 
     // TODO: Add padding and hex ints to Print
-    const char IntPaddingStr[BASE16_MAX_INT_STR] = "        ";
+    const char IntPaddingStr[BASE16_MAX_INT_STR+1] = "        ";
 
     for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
         instruction *Instruction = &Instructions[Idx];

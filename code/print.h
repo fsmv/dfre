@@ -8,8 +8,9 @@
     #error "Write(char *str, int len) macro must be defined (in the *_platform file)"
 #endif
 
-#define BASE10_MAX_INT_STR 11 + 1
-#define BASE16_MAX_INT_STR  8 + 1
+// If we ever need signed, add one more for the sign
+#define BASE10_MAX_INT_STR 10
+#define BASE16_MAX_INT_STR  8
 
 // Write an integer to a string in the specified base (not using CRT)
 size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
@@ -46,6 +47,7 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
  *     %s - null terminated char array
  *     %c - char
  *     %u - unsigned int32, in base 10
+ *     %x - unsigned int32, in base 16
  *     %% - literal '%'
  *     %. - Anything else is ignored silently
  */
@@ -53,18 +55,24 @@ uint32_t Print(const char *FormatString, ...) {
     va_list args;
     va_start(args, FormatString);
 
+    char IntBuffer[BASE10_MAX_INT_STR+1];
+
     uint32_t CharsWritten = 0;
-    size_t Idx = 0;
-    for (; FormatString[Idx]; ++Idx) {
-        if (FormatString[Idx] == '%') {
-            switch (FormatString[Idx + 1]) {
+    const char *SectionStart = FormatString;
+    const char *Curr = FormatString;
+    for (; *Curr; ++Curr) {
+        if (*Curr == '%') {
+            const size_t SectionLen = Curr - SectionStart;
+            Curr += 1;
+            //TODO: Add padding with spaces and with zeros
+            switch (*Curr) {
             case '%': {
                 // Write the string up to and including the first percent
-                CharsWritten += Write(FormatString, Idx + 1);
+                CharsWritten += Write(SectionStart, SectionLen + 1);
             } goto next;
             case 's': {
                 // Write the string up to the percent
-                CharsWritten += Write(FormatString, Idx);
+                CharsWritten += Write(SectionStart, SectionLen);
 
                 char *Str = va_arg(args, char*);
                 size_t Len = 0;
@@ -72,29 +80,33 @@ uint32_t Print(const char *FormatString, ...) {
                 CharsWritten += Write(Str, Len);
             } goto next;
             case 'c': {
-                CharsWritten += Write(FormatString, Idx);
+                CharsWritten += Write(SectionStart, SectionLen);
 
                 char Char = (char)va_arg(args, int);
                 CharsWritten += Write(&Char, 1);
             } goto next;
             case 'u': {
-                CharsWritten += Write(FormatString, Idx);
+                CharsWritten += Write(SectionStart, SectionLen);
 
                 uint32_t Int = va_arg(args, uint32_t);
-                char Buffer[10];
-                size_t Len = WriteInt(Int, Buffer, 10);
-                CharsWritten += Write(Buffer, Len);
+                size_t Len = WriteInt(Int, IntBuffer, 10);
+                CharsWritten += Write(IntBuffer, Len);
             } goto next;
-            next: // Act like we're doing a new call skipping to after the '%.'
-                FormatString += Idx + 2;
-                Idx = 0;
+            case 'x': {
+                CharsWritten += Write(SectionStart, SectionLen);
+
+                uint32_t Int = va_arg(args, uint32_t);
+                size_t Len = WriteInt(Int, IntBuffer, 16);
+                CharsWritten += Write(IntBuffer, Len);
+            } goto next;
+            next: // Reset the section string state
+                SectionStart = Curr + 1; // +1 for the char after %
             default: ;
             }
         }
     }
-
-    if (Idx != 0) {
-        CharsWritten += Write(FormatString, Idx);
+    if (Curr != SectionStart) {
+        CharsWritten += Write(SectionStart, (Curr - SectionStart));
     }
 
     va_end(args);
