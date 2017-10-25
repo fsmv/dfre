@@ -3,6 +3,22 @@
 
 #ifndef X86_OPCODE_H_
 
+// Primary Reference:
+//
+//   Intel® 64 and IA-32 Architectures Software Developer Manuals, Volume 2
+//
+// Which can be downloaded as a pdf for free at:
+//
+//   https://software.intel.com/en-us/articles/intel-sdm
+//
+// Bookmarks:
+//  - Instruction format Description      Vol. 2A Chapter 2.1
+//    - Format diagram                    Section 2.1, Figure 2-1
+//    - Addressing Modes Constants Table  Section 2.1.5, Tables 2-1, 2-2, 2-3
+//    - REX Prefixes are for 64bit mode   Section 2.2
+//  - Instruction set constants and args  Chapters 3-5
+//    - Understanding the tables          Section 3.1
+
 struct opcode_unpacked {
     // uint8_t Prefixes[4]; // not used
     uint8_t Opcode[2]; // 6 bits last two are direction and operand length
@@ -24,7 +40,7 @@ enum addressing_mode {
     MODE_NONE  = 0xFF,
 };
 
-// no strings, it doesn't work with indexes
+// no strings (for addressing_mode), it doesn't work with indexes
 
 enum reg {
     // ModRM bits 2,1,0 (dest operand) or 5,4,3 (src operand) (0 is LSB)
@@ -45,31 +61,42 @@ const char *reg_strings[] = {
     "EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"
 };
 
-/*
- * Comments key:
- *  - MR      - Dest a is register or dereferenced register, Src is a register
- *  - RM      - Op writes to Src and reads from Dest, Dist can be a dereference
- *  - I8, I32 - 8 or 32 bit immediate
- *  - M, R    - Register dereference or small register only instruction
- *  - RI32    - Small register only Dest plus 32 bit immediate Src
- */
+// Instruction operation constants to use when using this lib to generate code
+//
+// Order matters, values are indices into constant arrays below.
+//
+// Comments key:
+//  - MR        - Dest a is register or dereferenced register, Src is a register
+//  - RM        - Op writes to Src and reads from Dest, Dest can be dereferenced
+//  - RI8, RI32 - Register and 8 or 32 bit immediate
+//  - M, R      - Register dereference or small register only instruction
+//  - SRI32     - Small register only Dest plus 32 bit immediate Src
 enum op {
-    // Arithmatic
-    AND = 0,  // MR, I8, I32
-    OR,       // MR, I8, I32
-    XOR,      // MR, I8, I32
+    // Non-Jump ops
+    // Values are indices into op_strings and opcode_* (except opcode_Jmp*)
+
+    // Arithmetic
+    AND = 0,  // MR, RI8, RI32
+    OR,       // MR, RI8, RI32
+    XOR,      // MR, RI8, RI32
     INC,      // M, R
-    NOT,      // R
+    NOT,      // M, R
     // Comparison
-    BT,       // I8
-    CMP,      // MR, I8, I32
+    BT,       // RI8
+    CMP,      // MR, RI8, RI32
     // Memory
-    MOV,      // MR, RI32, I8, I32
+    MOV,      // MR, SRI32, RI8, RI32
     MOVR,     // RM, Dest and Src are reversed
     PUSH,     // M, R (is16 == true only)
     POP,      // M, R (is16 == true only)
+    // No args
+    RET,
+
     // Jumps
-    RET, // Not encoded as a jump instruction
+    // Values are indices into jmp_strings and opcode_Jmp*
+
+    // Jump enums start at zero again because the jump opcodes don't have the
+    // same encoding options as the non-jump ops. See: opcode_Jmp8, opcode_jmp16
     JMP = 0, JNC, JE, JNE, JL, JG
 };
 
@@ -80,6 +107,11 @@ const char *op_strings[] = {
     "RET ",
 };
 
+// TODO: Combine jmp_strings with op_strings and make the enum not restart at 0
+// for jumps. Just subtract JMP from the other jump opcodes in this file to keep
+// the indexes for the separated opcode arrays the way they are.
+
+// Strings separated because the jmp enums (in op) start at 0.
 const char *jmp_strings[] = {
     "JMP ", "JNC ", "JE  ", "JNE ", "JL  ", "JG  "
 };
@@ -107,33 +139,51 @@ struct instruction {
     size_t JumpDestIdx;
 };
 
-const uint8_t Op_MemReg[] =
+// Non jump opcode constants in order of the op enum
+//
+//  - These are the 8 bit opcodes, add 1 to get the 16/32 bit opcode
+//  - Different arrays are for different argument types (addressing modes)
+//    (reg = Register, mem = dereference register, imm = immediate (a constant))
+
+// Opcodes for args (reg, reg/mem), (reg/mem)
+const uint8_t opcode_MemReg[] =
 { 0x20, 0x08, 0x30, 0xFE, 0xF6,
   0x00, 0x38,
   0x88, 0x8A, 0xFE, 0x8E,
   0xC3};
-const uint16_t Op_Imm[] =
+// Opcodes for (reg/mem, imm), (imm)
+const uint16_t opcode_Imm[] =
 { 0x0080, 0x0080, 0x0080, 0x0000, 0x0000,
   0x0FBA, 0x0080,
   0x00C6, 0x0000, 0x0000, 0x0000,
   0x0000};
-const uint8_t Op_Extra[] = 
+// Used for (reg/mem, imm), (reg/mem) instructions.
+// It's the "/digit" in the Opcode column in the intel manual
+const uint8_t opcode_Extra[] = 
 { 0x04, 0x01, 0x06, 0x00, 0x02,
   0x04, 0x07,
   0x00, 0x00, 0x06, 0x00,
   0x00};
-const uint8_t Op_ShortRegOnly[] =
+// Opcodes for encoding the register in the opcode to save a byte.
+// Available for some (reg) and (reg, imm) instructions
+//
+// Add the register code to the opcode to encode register selection
+const uint8_t opcode_ShortReg[] =
 { 0x00, 0x00, 0x00, 0x40, 0x00,
   0x00, 0x00,
   0xB8, 0x00, 0x50, 0x58,
   0x00};
-const uint8_t  Op_Jmp8[] =  {   0xEB,   0x73,   0x74,   0x75,   0x7C,   0x7F};
-const uint16_t Op_Jmp16[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
+
+// Has separate index space from the other arrays because they are encoded
+// differently.
+// The two arrays are: 8 bit offset, or 16/32 bit offset
+const uint8_t  opcode_Jmp8[] =  {   0xEB,   0x73,   0x74,   0x75,   0x7C,   0x7F};
+const uint16_t opcode_Jmp16[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
 
 opcode_unpacked OpJump8(op Op, int8_t Offs) {
     opcode_unpacked Result = {};
 
-    Result.Opcode[1] = Op_Jmp8[Op];
+    Result.Opcode[1] = opcode_Jmp8[Op];
     Result.Immediate[0] = (uint8_t) Offs;
     Result.HasModRM = false;
     Result.ImmCount = 1;
@@ -144,7 +194,7 @@ opcode_unpacked OpJump8(op Op, int8_t Offs) {
 opcode_unpacked OpJump32(op Op, int32_t Offs) {
     opcode_unpacked Result = {};
 
-    uint16_t Code = Op_Jmp16[Op];
+    uint16_t Code = opcode_Jmp16[Op];
     Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
     Result.Opcode[1] = (uint8_t) (Code &   0xFF);
 
@@ -162,7 +212,7 @@ opcode_unpacked OpNoarg(op Op) {
     Assert(Op == RET);
 
     opcode_unpacked Result = {};
-    Result.Opcode[1] = Op_MemReg[Op];
+    Result.Opcode[1] = opcode_MemReg[Op];
     Result.HasModRM = false;
 
     return Result;
@@ -172,17 +222,17 @@ opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement
     Assert(Op == INC || Op == NOT || (Op == PUSH && is16) || (Op == POP && is16));
     opcode_unpacked Result = {};
 
-    if (Mode == REG && Op_ShortRegOnly[Op] != 0) {
-        Result.Opcode[1] = Op_ShortRegOnly[Op] + (uint8_t)Reg;
+    if (Mode == REG && opcode_ShortReg[Op] != 0) {
+        Result.Opcode[1] = opcode_ShortReg[Op] + (uint8_t)Reg;
         Result.HasModRM = false;
     } else {
         if (Mode == REG && !is16) {
             Assert(Reg != ESI && Reg != EDI && Reg != EBP && Reg != ESP);
         }
-        Result.Opcode[1] = Op_MemReg[Op] + (is16 ? 1 : 0);
+        Result.Opcode[1] = opcode_MemReg[Op] + (is16 ? 1 : 0);
 
         Result.ModRM |= Mode;
-        Result.ModRM |= (Op_Extra[Op] & 0x07) << 3;
+        Result.ModRM |= (opcode_Extra[Op] & 0x07) << 3;
         Result.ModRM |= Reg;
         Result.HasModRM = true;
 
@@ -216,7 +266,7 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
         }
     }
 
-    Result.Opcode[1] = Op_MemReg[Op] + (is16 ? 1 : 0);
+    Result.Opcode[1] = opcode_MemReg[Op] + (is16 ? 1 : 0);
 
     Result.ModRM |= Mode;
     Result.ModRM |= SrcReg << 3;
@@ -244,12 +294,12 @@ opcode_unpacked OpRegI8(op Op, addressing_mode Mode, reg DestReg, int32_t Displa
     Assert(Op == BT || Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
     opcode_unpacked Result = {};
 
-    uint16_t Code = Op_Imm[Op];
+    uint16_t Code = opcode_Imm[Op];
     Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
     Result.Opcode[1] = (uint8_t) (Code &   0xFF);
 
     Result.ModRM |= Mode;
-    Result.ModRM |= (Op_Extra[Op] & 0x07) << 3;
+    Result.ModRM |= (opcode_Extra[Op] & 0x07) << 3;
     Result.ModRM |= DestReg;
     Result.HasModRM = true;
 
@@ -277,16 +327,16 @@ opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     Assert(Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
     opcode_unpacked Result = {};
 
-    if (Mode == REG && Op_ShortRegOnly[Op] != 0) {
-        Result.Opcode[1] = Op_ShortRegOnly[Op] + (uint8_t)DestReg;
+    if (Mode == REG && opcode_ShortReg[Op] != 0) {
+        Result.Opcode[1] = opcode_ShortReg[Op] + (uint8_t)DestReg;
         Result.HasModRM = false;
     } else {
-        uint16_t Code = Op_Imm[Op] + 1;
+        uint16_t Code = opcode_Imm[Op] + 1;
         Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
         Result.Opcode[1] = (uint8_t) (Code &   0xFF);
 
         Result.ModRM |= Mode;
-        Result.ModRM |= (Op_Extra[Op] & 0x07) << 3;
+        Result.ModRM |= (opcode_Extra[Op] & 0x07) << 3;
         Result.ModRM |= DestReg;
         Result.HasModRM = true;
 
