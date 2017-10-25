@@ -109,8 +109,6 @@ void PrintInstruction(instruction *Instruction) {
     }
     Print(" ");
     // Args
-    char IntBuf[BASE16_MAX_INT_STR];
-    size_t IntLen;
     switch (Instruction->Type) {
     case JUMP:
         Print("Op # %x", (uint32_t)Instruction->JumpDestIdx);
