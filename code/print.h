@@ -15,7 +15,6 @@
 // Write an integer to a string in the specified base (not using CRT)
 size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
     size_t CharCount = 0;
-
     // Write the string backwards
     do {
         uint32_t digit = A % base;
@@ -27,7 +26,6 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
         A /= base;
         CharCount += 1;
     } while (A > 0);
-
     // Reverse the string
     for (char *Start = Str - CharCount, *End = Str - 1;
          Start < End;
@@ -37,7 +35,6 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
         *Start = *End;
         *End = Temp;
     }
-
     return CharCount;
 }
 
@@ -52,11 +49,11 @@ size_t WriteInt(uint32_t A, char *Str, uint32_t base = 16) {
  *     %. - Anything else is ignored silently
  */
 uint32_t Print(const char *FormatString, ...) {
+    // Setup the variadic arguments iteration state
     va_list args;
     va_start(args, FormatString);
 
     char IntBuffer[BASE10_MAX_INT_STR+1];
-
     uint32_t CharsWritten = 0;
     const char *SectionStart = FormatString;
     const char *Curr = FormatString;
@@ -64,51 +61,47 @@ uint32_t Print(const char *FormatString, ...) {
         if (*Curr == '%') {
             const size_t SectionLen = Curr - SectionStart;
             Curr += 1;
-            //TODO: Add padding with spaces and with zeros
+            // Write the string between this percent and the last one
+            CharsWritten += Write(SectionStart, SectionLen);
+            // Write the argument data
             switch (*Curr) {
+            // TODO: Add padding with spaces and with zeros
             case '%': {
-                // Write the string up to and including the first percent
-                CharsWritten += Write(SectionStart, SectionLen + 1);
+                CharsWritten += Write(Curr, 1);
             } goto next;
             case 's': {
-                // Write the string up to the percent
-                CharsWritten += Write(SectionStart, SectionLen);
-
                 char *Str = va_arg(args, char*);
                 size_t Len = 0;
                 for (; Str[Len]; ++Len) {}
                 CharsWritten += Write(Str, Len);
             } goto next;
             case 'c': {
-                CharsWritten += Write(SectionStart, SectionLen);
-
+                // char is automatically converted to int in variadic args calls
+                // so we have to un-convert it
                 char Char = (char)va_arg(args, int);
                 CharsWritten += Write(&Char, 1);
             } goto next;
             case 'u': {
-                CharsWritten += Write(SectionStart, SectionLen);
-
                 uint32_t Int = va_arg(args, uint32_t);
                 size_t Len = WriteInt(Int, IntBuffer, 10);
                 CharsWritten += Write(IntBuffer, Len);
             } goto next;
             case 'x': {
-                CharsWritten += Write(SectionStart, SectionLen);
-
                 uint32_t Int = va_arg(args, uint32_t);
                 size_t Len = WriteInt(Int, IntBuffer, 16);
                 CharsWritten += Write(IntBuffer, Len);
             } goto next;
-            next: // Reset the section string state
+            // Set the start of the next section after this placeholder
+            next:
                 SectionStart = Curr + 1; // +1 for the char after %
             default: ;
             }
         }
     }
+    // Write the rest of the string after all of the % placeholders
     if (Curr != SectionStart) {
         CharsWritten += Write(SectionStart, (Curr - SectionStart));
     }
-
     va_end(args);
     return CharsWritten;
 }
