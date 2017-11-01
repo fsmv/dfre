@@ -413,8 +413,7 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
         instruction *Inst = &Instructions[Idx];
 
         switch(Inst->Type) {
-            case JUMP:
-            {
+            case JUMP: {
                 int32_t JumpDist = (int32_t) (Inst->JumpDestIdx - Idx);
                 // We don't know how big the ops between here and the dest are yet
                 int32_t JumpOffsetUpperBound = JumpDist * MAX_OPCODE_LEN;
@@ -424,7 +423,7 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
                 } else {
                     *(NextOpcode++) = OpJump8(Inst->Op, 0);
                 }
-            }break;
+            } break;
             case ONE_REG:
                 *(NextOpcode++) = OpReg(Inst->Op, Inst->Mode, Inst->Dest, Inst->Disp, Inst->Is16);
                 break;
@@ -461,20 +460,23 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
 
 inline uint8_t Copy32(uint8_t *Dest, uint8_t *Src, uint8_t Count) {
     Assert(Count <= 4);
-
+    // Similar to duff's device
     switch(Count) {
     case 4:
         Dest[3] = Src[3];
+        // fallthrough
     case 3:
         Dest[2] = Src[2];
+        // fallthrough
     case 2:
         Dest[1] = Src[1];
+        // fallthrough
     case 1:
         Dest[0] = Src[0];
+        // fallthrough
     case 0:
-        ;
+        break;
     }
-
     return Count;
 }
 
