@@ -19,6 +19,14 @@
 //  - Instruction set constants and args  Chapters 3-5
 //    - Understanding the tables          Section 3.1
 
+// TODO: Real error handling or enforce the constraints by api design
+#if !defined(Assert)
+#warn "If you don't #define assert to cause an error if the condition is true, " \
+      "then it is possible to attempt to encode invalid instructions. This is " \
+      "undefined behavior. Actual error handling is coming when I get to it." \
+#define Assert(cond) ; //nothing
+#endif
+
 struct opcode_unpacked {
     // uint8_t Prefixes[4]; // not used
     uint8_t Opcode[2]; // 6 bits last two are direction and operand length
