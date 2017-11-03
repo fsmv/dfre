@@ -24,6 +24,8 @@
 #warn "If you don't #define assert to cause an error if the condition is true, " \
       "then it is possible to attempt to encode invalid instructions. This is " \
       "undefined behavior. Actual error handling is coming when I get to it." \
+// You can also just make a function if you want.
+// The Assert used in this project is in utils.h
 #define Assert(cond) ; //nothing
 #endif
 
