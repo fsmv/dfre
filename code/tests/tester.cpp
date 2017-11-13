@@ -21,8 +21,9 @@ int main(int argc, char *argv[]) {
     x86_opcode_RunTests();
 
     if (failed) {
+        Print("\nAt least one test failed.\n");
         return 1;
     }
-    Print("All tests passed!\n");
+    Print("\nAll tests passed!\n");
     return 0;
 }
