@@ -188,7 +188,7 @@ const uint8_t opcode_ShortReg[] =
 // differently.
 // The two arrays are: 8 bit offset, or 16/32 bit offset
 const uint8_t  opcode_Jmp8[] =  {   0xEB,   0x73,   0x74,   0x75,   0x7C,   0x7F};
-const uint16_t opcode_Jmp16[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
+const uint16_t opcode_Jmp32[] = { 0x00E9, 0x0F83, 0x0F84, 0x0F85, 0x0F8C, 0x0F8F};
 
 opcode_unpacked OpJump8(op Op, int8_t Offs) {
     opcode_unpacked Result = {};
@@ -204,7 +204,7 @@ opcode_unpacked OpJump8(op Op, int8_t Offs) {
 opcode_unpacked OpJump32(op Op, int32_t Offs) {
     opcode_unpacked Result = {};
 
-    uint16_t Code = opcode_Jmp16[Op];
+    uint16_t Code = opcode_Jmp32[Op];
     Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
     Result.Opcode[1] = (uint8_t) (Code &   0xFF);
 
@@ -228,17 +228,38 @@ opcode_unpacked OpNoarg(op Op) {
     return Result;
 }
 
+// TODO: Report an error if non-zero displacement used with a non MEM_DISP8 or
+// MEM_DISP32 mode.
+// Consider getting rid of those modes in the API And detecting them
+// automatically.
+
+// TODO: Consolidate this code, very similar things are being done in all of
+// the Opcode encoders
 opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement, bool is16) {
     Assert(Op == INC || Op == NOT || (Op == PUSH && is16) || (Op == POP && is16));
     opcode_unpacked Result = {};
 
-    if (Mode == REG && opcode_ShortReg[Op] != 0) {
+    if (is16 && Mode == REG && opcode_ShortReg[Op] != 0) {
+        // +rd opcodes. See Table 3-1 in Vol 2. Section 3.1.1.1
         Result.Opcode[1] = opcode_ShortReg[Op] + (uint8_t)Reg;
         Result.HasModRM = false;
     } else {
         if (Mode == REG && !is16) {
-            Assert(Reg != ESI && Reg != EDI && Reg != EBP && Reg != ESP);
+            // These would encode AH, CD, DH, BH respectively
+            // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
+            Assert(Reg != ESP && Reg != EBP && Reg != ESI && Reg != EDI);
+        } else if (Mode == MEM || Mode == MEM_DISP8 || Mode == MEM_DISP32) {
+            // See Section 2.1.5 Table 2-3
+            if (Reg == ESP) {
+                Result.SIB = 0x24;
+            } else if (Mode == MEM && Reg == EBP) {
+                // [EBX] is not encodable without a 0 displacement
+                // See Table 2-2
+                Mode = MEM_DISP8;
+                Displacement = 0;
+            }
         }
+
         Result.Opcode[1] = opcode_MemReg[Op] + (is16 ? 1 : 0);
 
         Result.ModRM |= Mode;
@@ -246,9 +267,6 @@ opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement
         Result.ModRM |= Reg;
         Result.HasModRM = true;
 
-        if (Mode != REG && Reg == ESP) {
-            Result.SIB = 0x24; // ESP with no scaled index register
-        }
         if (Mode == MEM_DISP8) {
             Result.DispCount = 1;
             Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
@@ -270,9 +288,22 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     opcode_unpacked Result = {};
 
     if (!is16) {
-        Assert(DestReg != ESI && DestReg != EDI && DestReg != EBP && DestReg != ESP);
-        if (Mode != REG) {
-            Assert(SrcReg != ESI && SrcReg != EDI && SrcReg != EBP && SrcReg != ESP);
+        Assert(SrcReg != ESP && SrcReg != EBP && SrcReg != ESI && SrcReg != EDI);
+    }
+    if (Mode == REG && !is16) {
+        // These would encode AH, CD, DH, BH respectively
+        // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
+        Assert(DestReg != ESP && DestReg != EBP && DestReg != ESI && DestReg != EDI);
+    }
+    if (Mode == MEM || Mode == MEM_DISP8 || Mode == MEM_DISP32) {
+        // See Section 2.1.5 Table 2-3
+        if (DestReg == ESP) {
+            Result.SIB = 0x24;
+        } else if (Mode == MEM && DestReg == EBP) {
+            // [EBX] is not encodable without a 0 displacement
+            // See Table 2-2
+            Mode = MEM_DISP8;
+            Displacement = 0;
         }
     }
 
@@ -283,9 +314,6 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     Result.ModRM |= DestReg;
     Result.HasModRM = true;
 
-    if (Mode != REG && DestReg == ESP) {
-        Result.SIB = 0x24; // ESP with no scaled index register
-    }
     if (Mode == MEM_DISP8) {
         Result.DispCount = 1;
         Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
@@ -300,48 +328,31 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     return Result;
 }
 
-opcode_unpacked OpRegI8(op Op, addressing_mode Mode, reg DestReg, int32_t Displacement, uint8_t Imm) {
-    Assert(Op == BT || Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
+opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displacement, uint32_t Imm, bool is16) {
+    Assert((!is16 && Op == BT) || Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
     opcode_unpacked Result = {};
 
-    uint16_t Code = opcode_Imm[Op];
-    Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
-    Result.Opcode[1] = (uint8_t) (Code &   0xFF);
-
-    Result.ModRM |= Mode;
-    Result.ModRM |= (opcode_Extra[Op] & 0x07) << 3;
-    Result.ModRM |= DestReg;
-    Result.HasModRM = true;
-
-    if (Mode != REG && DestReg == ESP) {
-        Result.SIB = 0x24; // ESP with no scaled index register
-    }
-    if (Mode == MEM_DISP8) {
-        Result.DispCount = 1;
-        Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
-    } else if (Mode == MEM_DISP32) {
-        Result.DispCount = 4;
-        Result.Displacement[0] = (uint8_t) (Displacement &       0xFF);
-        Result.Displacement[1] = (uint8_t)((Displacement &     0xFF00) >>  8);
-        Result.Displacement[2] = (uint8_t)((Displacement &   0xFF0000) >> 16);
-        Result.Displacement[3] = (uint8_t)((Displacement & 0xFF000000) >> 24);
-    }
-
-    Result.Immediate[0] = Imm;
-    Result.ImmCount = 1;
-
-    return Result;
-}
-
-opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, int32_t Displacement, uint32_t Imm) {
-    Assert(Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
-    opcode_unpacked Result = {};
-
-    if (Mode == REG && opcode_ShortReg[Op] != 0) {
+    if (is16 && Mode == REG && opcode_ShortReg[Op] != 0) {
         Result.Opcode[1] = opcode_ShortReg[Op] + (uint8_t)DestReg;
         Result.HasModRM = false;
     } else {
-        uint16_t Code = opcode_Imm[Op] + 1;
+        if (Mode == REG) {
+            // These would encode AH, CD, DH, BH respectively
+            // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
+            Assert(DestReg != ESP && DestReg != EBP && DestReg != ESI && DestReg != EDI);
+        } else if (Mode == MEM || Mode == MEM_DISP8 || Mode == MEM_DISP32) {
+            // See Section 2.1.5 Table 2-3
+            if (DestReg == ESP) {
+                Result.SIB = 0x24;
+            } else if (Mode == MEM && DestReg == EBP) {
+                // [EBX] is not encodable without a 0 displacement
+                // See Table 2-2
+                Mode = MEM_DISP8;
+                Displacement = 0;
+            }
+        }
+
+        uint16_t Code = opcode_Imm[Op] + (is16 ? 1 : 0);
         Result.Opcode[0] = (uint8_t)((Code & 0xFF00) >> 8);
         Result.Opcode[1] = (uint8_t) (Code &   0xFF);
 
@@ -350,9 +361,6 @@ opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
         Result.ModRM |= DestReg;
         Result.HasModRM = true;
 
-        if (Mode != REG && DestReg == ESP) {
-            Result.SIB = 0x24; // ESP with no scaled index register
-        }
         if (Mode == MEM_DISP8) {
             Result.DispCount = 1;
             Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
@@ -364,11 +372,16 @@ opcode_unpacked OpRegI32(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
             Result.Displacement[3] = (uint8_t)((Displacement & 0xFF000000) >> 24);
         }
     }
-    Result.Immediate[0] = (uint8_t) (Imm &       0xFF);
-    Result.Immediate[1] = (uint8_t)((Imm &     0xFF00) >>  8);
-    Result.Immediate[2] = (uint8_t)((Imm &   0xFF0000) >> 16);
-    Result.Immediate[3] = (uint8_t)((Imm & 0xFF000000) >> 24);
-    Result.ImmCount = 4;
+    if (is16) {
+        Result.ImmCount = 4;
+        Result.Immediate[0] = (uint8_t) (Imm &       0xFF);
+        Result.Immediate[1] = (uint8_t)((Imm &     0xFF00) >>  8);
+        Result.Immediate[2] = (uint8_t)((Imm &   0xFF0000) >> 16);
+        Result.Immediate[3] = (uint8_t)((Imm & 0xFF000000) >> 24);
+    } else {
+        Result.ImmCount = 1;
+        Result.Immediate[0] = (uint8_t) (Imm &       0xFF);
+    }
 
     return Result;
 }
@@ -441,11 +454,7 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
                 *(NextOpcode++) = OpRegReg(Inst->Op, Inst->Mode, Inst->Dest, Inst->Disp, Inst->Src, Inst->Is16);
                 break;
             case REG_IMM:
-                if (Inst->Is16) {
-                    *(NextOpcode++) = OpRegI32(Inst->Op, Inst->Mode, Inst->Dest, Inst->Disp, Inst->Imm);
-                } else {
-                    *(NextOpcode++) = OpRegI8(Inst->Op, Inst->Mode, Inst->Dest, Inst->Disp, (uint8_t) Inst->Imm);
-                }
+                *(NextOpcode++) = OpRegImm(Inst->Op, Inst->Mode, Inst->Dest, Inst->Disp, Inst->Imm, Inst->Is16);
                 break;
             case NOARG:
                 *(NextOpcode++) = OpNoarg(Inst->Op);
@@ -520,7 +529,7 @@ size_t PackCode(opcode_unpacked *Opcodes, size_t NumOpcodes, uint8_t *Dest) {
 #define RR32(op, mode, dest, src, disp) (instruction{(mode), (op), TWO_REG, (dest), (src), true, 0, (int32_t)(disp), 0})
 
 #define RI8(op, mode, dest, disp, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (uint32_t)(imm), (int32_t)(disp), 0})
-#define RI32(op, mode, dest, disp, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (imm), (int32_t)(disp), 0})
+#define RI32(op, mode, dest, disp, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (uint32_t)(imm), (int32_t)(disp), 0})
 #define J(op) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0, 0})
 #define JD(op, dest) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0, (dest)})
 
