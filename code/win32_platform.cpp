@@ -98,7 +98,6 @@ void __stdcall mainCRTStartup() {
 
     size_t argc;
     char **argv = ParseArgs(GetCommandLineA(), &argc);
-    Print("%s\n", argv[0]);
     int ExitCode = main((int)argc, argv);
     ExitProcess(ExitCode);
 }
