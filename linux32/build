@@ -8,5 +8,5 @@ CompilerOptions+="-m32 "
 CompilerOptions+="-Wall -Werror -Wextra "
 CompilerOptions+="-Wno-unused-parameter "
 
-g++ ../code/nix32_start.S ../code/tui.cpp $CompilerOptions -o re
+g++ ../code/nix32_start.S ../code/main.cpp $CompilerOptions -o re
 g++ ../code/nix32_start.S ../code/tests/tester.cpp -I../code $CompilerOptions -o test_re

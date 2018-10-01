@@ -1,7 +1,7 @@
 @echo off
 
 set EXEName=re.exe
-set SRC=..\code\tui.cpp
+set SRC=..\code\main.cpp
 set WindowsLibs=kernel32.lib user32.lib
 
 set TestEXEName=test_re.exe
