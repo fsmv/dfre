@@ -91,10 +91,12 @@ uint32_t Print(const char *FormatString, ...) {
                 size_t Len = WriteInt(Int, IntBuffer, 16);
                 CharsWritten += Write(IntBuffer, Len);
             } goto next;
-            // Set the start of the next section after this placeholder
-            next:
+            default: {
+                CharsWritten += Write("%", 1);
+                CharsWritten += Write(Curr, 1);
+            } goto next;
+            next: // Set the start of the next section after this placeholder
                 SectionStart = Curr + 1; // +1 for the char after %
-            default: ;
             }
         }
     }

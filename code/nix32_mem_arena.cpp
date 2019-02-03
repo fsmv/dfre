@@ -42,7 +42,7 @@
 // actually get committed until it gets written.
 //
 // Also, as mentioned under MAP_ANONYMOUS, this data is initialized to zero
-#define mmap_Commit(addr, size) mprotect((void*)(addr), (size), PROT_READ | PROT_WRITE)
+#define mprotect_Commit(addr, size) mprotect((void*)(addr), (size), PROT_READ | PROT_WRITE)
 
 // See mem_arena.h for documentation
 mem_arena ArenaInit() {
