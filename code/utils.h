@@ -15,6 +15,7 @@ inline void _AssertFailed(int LineNum, const char *File, const char *Condition) 
 #define Assert(cond) if (!(cond)) { _AssertFailed(__LINE__, __FILE__, #cond); }
 
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define Max(v1, v2) ((v1) >= (v2) ? (v1) : (v2))
 
 #define UTILS_H_
 #endif
