@@ -6,6 +6,12 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 
+// FIXME: Currently inline calls aren't linking properly
+// when using -nostdlib, -mmacosx-version-min=10.6. Removing
+// the inline specifier for their declarations is a temporary
+// workaround
+#define inline
+
 #define IsError(err) ((uint32_t)(err) > (uint32_t)-4096)
 #define Errno(err) (-(int32_t)(err))
 
@@ -39,5 +45,24 @@ extern "C" {
     inline int mprotect(void *addr, size_t length, int prot) {
         return (int)syscall3(SYS_mprotect, (void*)addr, (void*)length,
                              (void*)prot);
+    }
+
+    void* memset(void *addr, int val, size_t length) {
+        unsigned char *d = (unsigned char*)addr;
+
+        for (; length; length--, d++)
+            *d = val;
+
+        return addr;
+    }
+
+    void* memcpy(void *dest, const void *src, size_t length) {
+        unsigned char *d = (unsigned char*)dest;
+        const unsigned char *s = (const unsigned char*)src;
+
+        for (; length; length--)
+            *d++ = *s++;
+
+        return dest;
     }
 }

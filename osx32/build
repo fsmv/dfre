@@ -2,6 +2,7 @@
 
 CompilerOptions="-DDFRE_OSX32 "
 CompilerOptions+="-nostdlib "
+CompilerOptions+="-mmacosx-version-min=10.6 "
 CompilerOptions+="-std=c++11 "
 CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
 CompilerOptions+="-fno-stack-protector "

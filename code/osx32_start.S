@@ -7,10 +7,10 @@
 #include <sys/syscall.h>
 
 .intel_syntax noprefix
-.globl _start
+.globl start
 .globl _syscall0, _syscall1, _syscall2, _syscall3, _syscall4, _syscall5, _syscall6
 .text
-    _start:
+    start:
         xor ebp, ebp       // mark the base stack frame
         pop esi
         mov ecx,esp
