@@ -1,0 +1,13 @@
+#!/bin/bash
+
+CompilerOptions="-DDFRE_OSX32 "
+CompilerOptions+="-nostdlib "
+CompilerOptions+="-std=c++11 "
+CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
+CompilerOptions+="-fno-stack-protector "
+CompilerOptions+="-m32 "
+CompilerOptions+="-Wall -Werror -Wextra "
+CompilerOptions+="-Wno-unused-parameter "
+
+clang++ ../code/osx32_start.S ../code/main.cpp $CompilerOptions -o re
+clang++ ../code/osx32_start.S ../code/tests/tester.cpp -I../code $CompilerOptions -o test_re
