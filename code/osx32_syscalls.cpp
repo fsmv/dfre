@@ -10,12 +10,12 @@
 #define Errno(err) (-(int32_t)(err))
 
 extern "C" {
-    uint32_t syscall1(uint32_t call, void*)                                     asm("syscall1");
-    uint32_t syscall2(uint32_t call, void*, void*)                              asm("syscall2");
-    uint32_t syscall3(uint32_t call, void*, void*, void*)                       asm("syscall3");
-    uint32_t syscall4(uint32_t call, void*, void*, void*, void*)                asm("syscall4");
-    uint32_t syscall5(uint32_t call, void*, void*, void*, void*, void*)         asm("syscall5");
-    uint32_t syscall6(uint32_t call, void*, void*, void*, void*, void*, void*)  asm("syscall6");
+    uint32_t syscall1(uint32_t call, void*);
+    uint32_t syscall2(uint32_t call, void*, void*);
+    uint32_t syscall3(uint32_t call, void*, void*, void*);
+    uint32_t syscall4(uint32_t call, void*, void*, void*, void*);
+    uint32_t syscall5(uint32_t call, void*, void*, void*, void*, void*);
+    uint32_t syscall6(uint32_t call, void*, void*, void*, void*, void*, void*);
 
     inline void exit(int retcode) {
         syscall1(SYS_exit, (void*)retcode);
@@ -29,11 +29,13 @@ extern "C" {
     inline int munmap(void *addr, size_t length) {
         return (int)syscall2(SYS_write, (void*)addr, (void*)length);
     }
+
     inline void *mmap(void *addr, size_t length, int prot,
                       int flags, int fd, off_t offset) {
         return (void*)syscall6(SYS_mmap, addr, (void*)length, (void*)prot,
                                (void*)flags, (void*)fd, (void*)offset);
     }
+
     inline int mprotect(void *addr, size_t length, int prot) {
         return (int)syscall3(SYS_mprotect, (void*)addr, (void*)length,
                              (void*)prot);

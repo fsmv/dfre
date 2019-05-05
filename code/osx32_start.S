@@ -8,7 +8,7 @@
 
 .intel_syntax noprefix
 .globl _start
-.globl syscall0, syscall1, syscall2, syscall3, syscall4, syscall5, syscall6
+.globl _syscall0, _syscall1, _syscall2, _syscall3, _syscall4, _syscall5, _syscall6
 .text
     _start:
         xor ebp, ebp       // mark the base stack frame
@@ -23,13 +23,13 @@
 
     // OSX, *BSD use C calling convention for syscalls
     // with 4 byte offset from stack arguments
-    syscall0:
-    syscall1:
-    syscall2:
-    syscall3:
-    syscall4:
-    syscall5:
-    syscall6:
+    _syscall0:
+    _syscall1:
+    _syscall2:
+    _syscall3:
+    _syscall4:
+    _syscall5:
+    _syscall6:
         mov eax, [esp+4] // syscall num
         add esp, 4
         int 0x80
