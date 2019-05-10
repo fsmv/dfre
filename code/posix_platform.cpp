@@ -1,3 +1,6 @@
+// Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
+// Provided under the MIT License: https://mit-license.org
+
 #define Write(str, len) write(1, (str), (len))
 #define Exit(code) exit((code))
 

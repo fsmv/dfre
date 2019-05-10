@@ -1,10 +1,10 @@
 // Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-// Thanks to Franc[e]sco (weeb.ddns.net) for his nolibc projects which I used
-// as an example for this.
-
 #include <sys/syscall.h>
+
+// Note that clang will insert the underscores into our function names
+// https://stackoverflow.com/a/5908708
 
 .intel_syntax noprefix
 .globl start
