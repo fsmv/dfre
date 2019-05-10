@@ -10,6 +10,7 @@
 .globl _start
 .globl syscall0, syscall1, syscall2, syscall3, syscall4, syscall5, syscall6
 .text
+#if !defined(NO_START)
     _start:
         xor ebp, ebp       // mark the base stack frame
         pop esi
@@ -20,6 +21,7 @@
         mov ebx, eax       // move retern value into arg1 of syscall
         mov eax, SYS_exit  // calling exit()
         int 0x80           // syscall
+#endif
 
     syscall0:
         mov eax, [esp+4] // syscall num

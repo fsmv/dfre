@@ -10,6 +10,7 @@
 .globl start
 .globl _syscall0, _syscall1, _syscall2, _syscall3, _syscall4, _syscall5, _syscall6
 .text
+#if !defined(NO_START)
     start:
         xor ebp, ebp       // mark the base stack frame
         pop esi
@@ -20,6 +21,7 @@
         mov ebx, eax       // move retern value into arg1 of syscall
         mov eax, SYS_exit  // calling exit()
         int 0x80           // syscall
+#endif
 
     // OSX, *BSD use C calling convention for syscalls
     // with 4 byte offset from stack arguments

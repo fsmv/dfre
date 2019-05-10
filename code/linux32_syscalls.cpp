@@ -27,7 +27,7 @@ extern "C" {
     }
 
     inline int munmap(void *addr, size_t length) {
-        return (int)syscall2(SYS_write, (void*)addr, (void*)length);
+        return (int)syscall2(SYS_munmap, (void*)addr, (void*)length);
     }
 
     inline void *mmap(void *addr, size_t length, int prot,

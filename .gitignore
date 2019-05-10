@@ -2,3 +2,6 @@
 *.dSYM
 re
 test_re
+*.gcno
+*.gcda
+*.gcov

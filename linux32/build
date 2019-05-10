@@ -1,12 +1,18 @@
 #!/bin/bash
 
 CompilerOptions="-DDFRE_NIX32 "
-CompilerOptions+="-nostdlib "
 CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
 CompilerOptions+="-fno-stack-protector "
 CompilerOptions+="-m32 "
 CompilerOptions+="-Wall -Werror -Wextra "
 CompilerOptions+="-Wno-unused-parameter "
+
+if [ "$1" == '--coverage' ]; then
+    echo "To get a coverage report run: ./test_re && gcov tester.cpp"
+    CompilerOptions+="-fprofile-arcs -ftest-coverage -DNO_START "
+else
+    CompilerOptions+="-nostdlib "
+fi
 
 g++ ../code/nix32_start.S ../code/main.cpp $CompilerOptions -o re
 g++ ../code/nix32_start.S ../code/tests/tester.cpp -I../code $CompilerOptions -o test_re
