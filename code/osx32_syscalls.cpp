@@ -38,7 +38,7 @@ extern "C" {
 
     inline void *mmap(void *addr, size_t length, int prot,
                       int flags, int fd, off_t offset) {
-        return (void*)syscall6(SYS_mmap, addr, (void*)length, (void*)prot,
+        return (void*)syscall6(SYS_munmap, addr, (void*)length, (void*)prot,
                                (void*)flags, (void*)fd, (void*)offset);
     }
 
