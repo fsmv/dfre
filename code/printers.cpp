@@ -183,7 +183,7 @@ void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true) {
         IntStr[3] = '\0';
 
         Print(IntStr);
-        if ((i + 1) % 16 == 0) {
+        if ((i + 1) % 16 == 0 || i + 1 == Size) {
             Print("\n");
         }
     }
