@@ -1,6 +1,9 @@
 // Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
+// TODO: put all the NFA handling functions together
+// They're not currently in this file because some are only needed in one place
+// Also some work on an Arena pointer instead of an nfa pointer, maybe make nfa_arena.h
 #ifndef NFA_H_
 
 // +---------------------------------------------------+
@@ -40,14 +43,22 @@ enum nfa_label_type {
 
 // One label the goes with a group of transitions (the label on an arc)
 struct nfa_label {
+    // TODO: Should we find a way to enforce that different types don't use A and B?
+    //       Maybe a union of structs for each type?
     nfa_label_type Type;
 
     // Data used differently by the different label types
+    // See nfa_label_type documentation
     char A;
     char B;
 };
 
-#define NFA_TRANSITIONS_PER_LIST 8
+// The number of transitions an arc_list holds when stack allocated.
+//
+// When generating the NFA, we add arc_list chunks to the end of the arena
+// allowing multiple arc_lists with the same label. Later the chunks are
+// combined in NFACombineArcLists(nfa)
+#define NFA_TRANSITIONS_PER_LIST_CHUNK 8
 /**
  * A list of arcs in the NFA which have the same label.
  *
@@ -56,7 +67,7 @@ struct nfa_label {
 struct nfa_arc_list {
     nfa_label Label;
     size_t NumTransitions;
-    nfa_transition Transitions[NFA_TRANSITIONS_PER_LIST];
+    nfa_transition Transitions[NFA_TRANSITIONS_PER_LIST_CHUNK];
 };
 
 /**
@@ -76,7 +87,7 @@ struct nfa_arc_list {
  *
  *  - If, when all characters of the input string have been consumed we have
  *    ended in a state marked accept, then the string matches
- *    (or in other words, is in the language described by the NFA).
+ *    (or in other words: the string is in the language described by the NFA).
  *
  *  - Arcs can only be traveled over if the current character in the input
  *    string meets the requirements of the label on the arc.
@@ -94,7 +105,7 @@ struct nfa_arc_list {
  *      structure mirrors the structure of thefinal assembly code generated.
  *
  *  - For representing states, we simply use an integer index number.
- *    - Since states need no extra information, we don't need to store an array 
+ *    - Since states need no extra information, we don't need to store an array
  *      of them. We only need to remember how many there are.
  */
 struct nfa {
@@ -124,15 +135,17 @@ nfa_arc_list *NFAFirstArcList(nfa *NFA) {
     return &NFA->_ArcLists[0];
 }
 
+// Handles both combined and uncombined NFAs
+// See also NFACombineArcLists in parser.cpp
 nfa_arc_list *NFANextArcList(nfa_arc_list *ArcList) {
     // TODO: Maybe just store the number of arc list slots this list takes up.
     //       If we did that, we wouldn't have these branches here.
     size_t ExtraTransitions = 0;
-    if (ArcList->NumTransitions > NFA_TRANSITIONS_PER_LIST) {
-        ExtraTransitions = ArcList->NumTransitions - NFA_TRANSITIONS_PER_LIST;
+    if (ArcList->NumTransitions > NFA_TRANSITIONS_PER_LIST_CHUNK) {
+        ExtraTransitions = ArcList->NumTransitions - NFA_TRANSITIONS_PER_LIST_CHUNK;
     }
-    size_t ExtraArcLists = ExtraTransitions / NFA_TRANSITIONS_PER_LIST;
-    if (ExtraTransitions % NFA_TRANSITIONS_PER_LIST != 0) {
+    size_t ExtraArcLists = ExtraTransitions / NFA_TRANSITIONS_PER_LIST_CHUNK;
+    if (ExtraTransitions % NFA_TRANSITIONS_PER_LIST_CHUNK != 0) {
         ExtraArcLists += 1;
     }
     return ArcList + 1 + ExtraArcLists;

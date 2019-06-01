@@ -72,6 +72,7 @@ void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
     }
 }
 
+// TODO: Document the overall structure of the assembly code
 size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // ebx = char *CurrChar
     // eax = uint32_t ActiveStates
@@ -81,13 +82,15 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     NextInstr() = R32(PUSH, REG, EBX, 0); // Callee save
     NextInstr() = RR32(MOVR, MEM_DISP8, ESP, EBX, 8); // Get pointer to the search string off the stack
 
-    NextInstr() = RI32(MOV, REG, EAX, 0, 1 << NFA_STARTSTATE); // Set state 0 as active
+    NextInstr() = RI32(MOV, REG, EAX, 0, 1 << NFA_STARTSTATE); // Set start state as active
 
     size_t Top = PeekIdx();
 
     // Loop following epsilon arcs until following doesn't activate any new states
     size_t EpsilonLoopStart = PeekIdx();
     // Epsilon arcs, garunteed to be the first arc list
+    // TODO: Is this premature opmtimisation? We could just search for epsilon
+    // like we do below for the dot arc list.
     nfa_arc_list *EpsilonArcs = NFAFirstArcList(NFA);
     Assert(EpsilonArcs->Label.Type == EPSILON);
     NextInstr() = RR32(XOR, REG, ECX, ECX, 0); // Clear states to enable
@@ -107,7 +110,7 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
 
     nfa_arc_list *StartList = NFANextArcList(EpsilonArcs);
 
-    // Dot arcs
+    // Dot arcs (only one possible)
     nfa_arc_list *DotArcs = StartList;
     for (size_t Idx = 0; Idx < NFA->NumArcLists; ++Idx) {
         if (DotArcs->Label.Type == DOT) {

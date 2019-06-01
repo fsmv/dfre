@@ -23,7 +23,7 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         nfa_arc_list *TestArcList = &NFA->_ArcLists[ArcListIdx];
         if (TestArcList->Label == Label &&
-            TestArcList->NumTransitions < NFA_TRANSITIONS_PER_LIST)
+            TestArcList->NumTransitions < NFA_TRANSITIONS_PER_LIST_CHUNK)
         {
             ArcListToUse = TestArcList;
         }
@@ -47,14 +47,14 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
  * Before: [ {EPSILON, 2, {trans_a, trans_b}}, {'A', 1, {trans_c}}, {EPSILON, 1, {trans_d}} ]
  * After:  [ {EPSILON, 3, {trans_a, trans_b, trans_d}}, {'A', 1, {trans_c}} ]
  *
- * In NFA generation, arc_lists are limited to NFA_TRANSITIONS_PER_LIST
+ * In NFA generation, arc_lists are limited to NFA_TRANSITIONS_PER_LIST_CHUNK
  * transitions each. To extend the list we simply add another arc_list with the
  * same label. To make looping over the transitions list in the code gen step
  * easier, we want to pack those lists with the same label together into one
  * larger arc_list list.
  *
- * Combined arc_lists are not moved so that they're one after another. That is:
- * if a list was made from 3 combined lists (has > 2 * NFA_TRANSITIONS_PER_LIST
+ * Combined arc_lists are not moved so that they're packed tightly. That is:
+ * if a list was made from 3 combined lists (has > 2 * NFA_TRANSITIONS_PER_LIST_CHUNK
  * transitions), then that list will take up 3 * sizeof(nfa_arc_list) bytes.
  * We already have the memory allocated so moving around the memory to compact
  * it would just waste time.
@@ -64,7 +64,7 @@ void NFACombineArcLists(nfa *NFA) {
     nfa_arc_list *CurrList = NFAFirstArcList(NFA);
     // Skip the last one because it won't have any children
     for (size_t Idx = 0; Idx < NFA->NumArcLists - 1; ++Idx) {
-        if (CurrList->NumTransitions < NFA_TRANSITIONS_PER_LIST) {
+        if (CurrList->NumTransitions < NFA_TRANSITIONS_PER_LIST_CHUNK) {
             CurrList += 1;
             continue;
         }
@@ -92,7 +92,7 @@ void NFACombineArcLists(nfa *NFA) {
             CurrList->NumTransitions += ChildCopy.NumTransitions;
             ChildrenFound += 1;
 
-            if (ChildCopy.NumTransitions < NFA_TRANSITIONS_PER_LIST) {
+            if (ChildCopy.NumTransitions < NFA_TRANSITIONS_PER_LIST_CHUNK) {
                 break;
             }
 
@@ -116,6 +116,9 @@ nfa *RegexToNFA(char *Regex, mem_arena *Arena) {
 
     NFA->NumStates = 2; // Reserve 0 for accept, 1 for start
     NFA->NumArcLists = NFA->NumArcListsAllocated = 1; // Reserve 0 for epsilon
+
+    // Initialize the first arc list, which is always epsilon arcs
+    // See x86_codegen.cpp. Epsilon arcs are a special case.
     nfa_label EpsilonLabel = {};
     EpsilonLabel.Type = EPSILON;
     NFA->_ArcLists[0].Label = EpsilonLabel;
@@ -134,9 +137,9 @@ nfa *RegexToNFA(char *Regex, mem_arena *Arena) {
             case '.': {
                 uint32_t MyState = NFA->NumStates++;
 
+                nfa_transition Transition = {};
                 nfa_label Label = {};
                 Label.Type = DOT;
-                nfa_transition Transition = {};
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
