@@ -33,12 +33,12 @@ extern "C" {
     }
 
     inline int munmap(void *addr, size_t length) {
-        return (int)syscall2(SYS_write, (void*)addr, (void*)length);
+        return (int)syscall2(SYS_munmap, (void*)addr, (void*)length);
     }
 
     inline void *mmap(void *addr, size_t length, int prot,
                       int flags, int fd, off_t offset) {
-        return (void*)syscall6(SYS_munmap, addr, (void*)length, (void*)prot,
+        return (void*)syscall6(SYS_mmap, addr, (void*)length, (void*)prot,
                                (void*)flags, (void*)fd, (void*)offset);
     }
 
