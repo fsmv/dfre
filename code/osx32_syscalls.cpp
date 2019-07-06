@@ -48,20 +48,19 @@ extern "C" {
     }
 
     void* memset(void *addr, int val, size_t length) {
-        unsigned char *d = (unsigned char*)addr;
-
-        for (; length; length--, d++)
+        uint8_t *d = (uint8_t*)addr;
+        for (; length; length--, d++) {
             *d = val;
-
+        }
         return addr;
     }
 
     void* memcpy(void *dest, const void *src, size_t length) {
-        unsigned char *d = (unsigned char*)dest;
-        const unsigned char *s = (const unsigned char*)src;
-
-        for (; length; length--)
-            *d++ = *s++;
+        uint8_t *d = (uint8_t*)dest;
+        const uint8_t *s = (uint8_t*)src;
+        for (; length; length--, d++, s++) {
+            *d = *s;
+        }
 
         return dest;
     }
