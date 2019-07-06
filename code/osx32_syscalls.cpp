@@ -6,12 +6,6 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 
-// FIXME: Currently inline calls aren't linking properly
-// when using -nostdlib, -mmacosx-version-min=10.6. Removing
-// the inline specifier for their declarations is a temporary
-// workaround
-#define inline
-
 #define IsError(err) ((uint32_t)(err) > (uint32_t)-4096)
 #define Errno(err) (-(int32_t)(err))
 
@@ -36,7 +30,7 @@ extern "C" {
         return (int)syscall2(SYS_munmap, (void*)addr, (void*)length);
     }
 
-    inline void *mmap(void *addr, size_t length, int prot,
+    inline void* mmap(void *addr, size_t length, int prot,
                       int flags, int fd, off_t offset) {
         return (void*)syscall6(SYS_mmap, addr, (void*)length, (void*)prot,
                                (void*)flags, (void*)fd, (void*)offset);

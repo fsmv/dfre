@@ -7,13 +7,16 @@ CompilerOptions+="-fno-stack-protector "
 CompilerOptions+="-m32 "
 CompilerOptions+="-Wall -Werror -Wextra "
 CompilerOptions+="-Wno-unused-parameter "
-CompilerOptions+="-mmacosx-version-min=10.6 "
 
 if [ "$1" == '--coverage' ]; then
     echo "To get a coverage report run: ./test_re && gcov tester.cpp"
+    CompilerOptions+="-stdlib=libc++ "
+    CompilerOptions+="-mmacosx-version-min=10.9 "
     CompilerOptions+="-fprofile-arcs -ftest-coverage -DNO_START "
 else
+    CompilerOptions+="-static "
     CompilerOptions+="-nostdlib "
+    CompilerOptions+="-mmacosx-version-min=10.6 "
 fi
 
 clang++ ../code/osx32_start.S ../code/main.cpp $CompilerOptions -o re
