@@ -1,3 +1,6 @@
+// Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
+// Provided under the MIT License: https://mit-license.org
+
 #if defined(DFRE_WIN32)
     #include "win32_platform.cpp"
 #elif defined(DFRE_NIX32)

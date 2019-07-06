@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
+// Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
 #if defined(DFRE_WIN32)
@@ -33,9 +33,12 @@ bool RunCode(uint8_t *Code, size_t CodeWritten, char *WordPtr) {
     return (IsMatch != 0);
 }
 
-void CompileAndMatch(char *Regex, char *Word) {
-    Print("-------------------- Regex --------------------\n\n");
-    PrintRegex(Regex);
+int CompileAndMatch(bool Verbose, char *Regex, char *Word) {
+    if (Verbose) {
+        Print("-------------------- Regex --------------------\n\n");
+        PrintRegex(Regex);
+        Print("\n"); // Goes here because NFA is conditionally the first section
+    }
 
     // Allocate storage for and then run each stage of the compiler in order
     mem_arena ArenaA = ArenaInit();
@@ -44,9 +47,13 @@ void CompileAndMatch(char *Regex, char *Word) {
     // Convert regex to NFA
     nfa *NFA = RegexToNFA(Regex, &ArenaA);
 
-    Print("\n--------------------- NFA ---------------------\n\n");
-    PrintArena("Arena A", &ArenaA);
-    PrintNFA(NFA);
+    if (!Word || Verbose) {
+        Print("--------------------- NFA ---------------------\n\n");
+        if (Verbose) {
+            PrintArena("Arena A", &ArenaA);
+        }
+        PrintNFA(NFA);
+    }
 
     // Note: this is all x86-specific after this point
     // TODO: ARM support
@@ -55,9 +62,13 @@ void CompileAndMatch(char *Regex, char *Word) {
     size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
     instruction *Instructions = (instruction *)ArenaB.Base;
 
-    Print("\n----------------- Instructions ----------------\n\n");
-    PrintArena("Arena B", &ArenaB);
-    PrintInstructions(Instructions, InstructionsGenerated);
+    if (!Word || Verbose) {
+        Print("\n----------------- Instructions ----------------\n\n");
+        if (Verbose) {
+            PrintArena("Arena B", &ArenaB);
+        }
+        PrintInstructions(Instructions, InstructionsGenerated);
+    }
 
     // Allocate storage for the unpacked x86 opcodes
     NFA = (nfa*)0;
@@ -69,9 +80,11 @@ void CompileAndMatch(char *Regex, char *Word) {
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
     // Note: no more return count here, this keeps the same number of instructions
 
-    Print("\n----------------- x86 Unpacked ----------------\n\n");
-    PrintArena("Arena A", &ArenaA);
-    PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
+    if (Verbose) {
+        Print("\n----------------- x86 Unpacked ----------------\n\n");
+        PrintArena("Arena A", &ArenaA);
+        PrintUnpackedOpcodes(UnpackedOpcodes, InstructionsGenerated);
+    }
 
     // Allocate storage for the actual byte code
     // TODO: Make PackCode allocate a tighter amount of space
@@ -83,28 +96,43 @@ void CompileAndMatch(char *Regex, char *Word) {
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 
-    Print("\n--------------------- Code --------------------\n\n");
-    PrintArena("Arena B", &ArenaB);
-    PrintByteCode(Code, CodeWritten);
+    if (!Word || Verbose) {
+        Print("\n--------------------- Code --------------------\n\n");
+        PrintArena("Arena B", &ArenaB);
+        PrintByteCode(Code, CodeWritten);
+    }
 
     if (Word) {
         bool IsMatch = RunCode(Code, CodeWritten, Word);
 
-        Print("\n\n-------------------- Result -------------------\n\n");
-        Print("Search Word: %s\n", Word);
+        if (Verbose) {
+            Print("\n-------------------- Result -------------------\n\n");
+            Print("Search Word: %s\n", Word);
+        }
         if (IsMatch) {
             Print("Match\n");
+            return 0;
         }else{
             Print("No Match\n");
+            return 1;
         }
     }
+    return 0;
 }
 
 extern "C"
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        Print("Usage: %s [regex] [search string (optional)]\n", argv[0]);
+    if (argc < 2) { // program name and the required regex
+        Print("Usage: %s (-v) [regex] (optional search string)\n", argv[0]);
         return 1;
+    }
+
+    // TODO: Real flag parser (this is pretty hacky)
+    bool Verbose = false;
+    if (argv[1][0] == '-' && argv[1][1] == 'v' && argv[1][2] == '\0') {
+        Verbose = true;
+        argv += 1;
+        argc += 1;
     }
 
     char *Word = 0;
@@ -112,6 +140,5 @@ int main(int argc, char *argv[]) {
         Word = argv[2];
     }
 
-    CompileAndMatch(argv[1], Word);
-    return 0;
+    return CompileAndMatch(Verbose, argv[1], Word);
 }

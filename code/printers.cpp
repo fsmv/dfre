@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Andrew Kallmeyer <fsmv@sapium.net>
+// Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
 #include "nfa.h"
@@ -183,7 +183,7 @@ void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true) {
         IntStr[3] = '\0';
 
         Print(IntStr);
-        if ((i + 1) % 16 == 0) {
+        if ((i + 1) % 16 == 0 || i + 1 == Size) {
             Print("\n");
         }
     }

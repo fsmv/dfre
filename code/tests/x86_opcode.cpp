@@ -1,3 +1,6 @@
+// Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
+// Provided under the MIT License: https://mit-license.org
+
 #include "../x86_opcode.h"
 #include "../printers.cpp"
 
