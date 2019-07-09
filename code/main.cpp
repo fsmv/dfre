@@ -4,9 +4,13 @@
 #if defined(DFRE_WIN32)
     #include "win32_platform.cpp"
 #elif defined(DFRE_NIX32)
-    #include "nix32_platform.cpp"
+    #include "linux32_syscalls.cpp"
+    #include "posix_platform.cpp"
+#elif defined(DFRE_OSX32)
+    #include "osx32_syscalls.cpp"
+    #include "posix_platform.cpp"
 #else
-    #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
+    #error "DFRE_WIN32, DFRE_NIX32, or DFRE_OSX32 must be defined to set the platform"
 #endif
 
 #include "parser.cpp"
@@ -86,7 +90,7 @@ int CompileAndMatch(bool Verbose, char *Regex, char *Word) {
     // TODO: Make PackCode allocate a tighter amount of space
     Instructions = (instruction*)0;
     ArenaB.Used = 0;
-    size_t UpperBoundCodeSize = sizeof(opcode_unpacked) * InstructionsGenerated; 
+    size_t UpperBoundCodeSize = sizeof(opcode_unpacked) * InstructionsGenerated;
     Alloc(&ArenaB, UpperBoundCodeSize);
     uint8_t *Code = (uint8_t*)ArenaB.Base;
 

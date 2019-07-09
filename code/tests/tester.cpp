@@ -4,9 +4,13 @@
 #if defined(DFRE_WIN32)
     #include "win32_platform.cpp"
 #elif defined(DFRE_NIX32)
-    #include "nix32_platform.cpp"
+    #include "linux32_syscalls.cpp"
+    #include "posix_platform.cpp"
+#elif defined(DFRE_OSX32)
+    #include "osx32_syscalls.cpp"
+    #include "posix_platform.cpp"
 #else
-    #error "DFRE_WIN32 or DFRE_NIX32 must be defined to set the platform"
+    #error "DFRE_WIN32, DFRE_NIX32, or DFRE_OSX32 must be defined to set the platform"
 #endif
 
 #include "print.h"
