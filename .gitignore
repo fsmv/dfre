@@ -1,7 +1,13 @@
+# Build files
+win32/
+!win32/build.bat
+linux32/
+!/linux32/build
+osx32/
+!/osx32/build
+
+# Mac junk
 .DS_Store
 *.dSYM
-re
-test_re
-*.gcno
-*.gcda
-*.gcov
+
+# Use .git/info/excludes for a personal .gitignore
