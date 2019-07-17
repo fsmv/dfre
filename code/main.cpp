@@ -73,8 +73,8 @@ int CompileAndMatch(bool Verbose, char *Regex, char *Word) {
     // Allocate storage for the unpacked x86 opcodes
     NFA = (nfa*)0;
     ArenaA.Used = 0;
-    Alloc(&ArenaA, sizeof(opcode_unpacked) * InstructionsGenerated);
-    opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*)ArenaA.Base;
+    opcode_unpacked *UnpackedOpcodes = (opcode_unpacked*)Alloc(&ArenaA,
+            sizeof(opcode_unpacked) * InstructionsGenerated);
 
     // Turn the instructions into x86 op codes and resolve jump destinations
     AssembleInstructions(Instructions, InstructionsGenerated, UnpackedOpcodes);
@@ -87,12 +87,10 @@ int CompileAndMatch(bool Verbose, char *Regex, char *Word) {
     }
 
     // Allocate storage for the actual byte code
-    // TODO: Make PackCode allocate a tighter amount of space
     Instructions = (instruction*)0;
     ArenaB.Used = 0;
-    size_t UpperBoundCodeSize = sizeof(opcode_unpacked) * InstructionsGenerated;
-    Alloc(&ArenaB, UpperBoundCodeSize);
-    uint8_t *Code = (uint8_t*)ArenaB.Base;
+    size_t UpperBoundCodeSize = MAX_OPCODE_LEN * InstructionsGenerated;
+    uint8_t *Code = (uint8_t*)Alloc(&ArenaB, UpperBoundCodeSize);
 
     size_t CodeWritten = PackCode(UnpackedOpcodes, InstructionsGenerated, Code);
 

@@ -14,5 +14,5 @@ else
     CompilerOptions+="-nostdlib "
 fi
 
-g++ ../code/nix32_start.S ../code/main.cpp $CompilerOptions -o re
-g++ ../code/nix32_start.S ../code/tests/tester.cpp -I../code $CompilerOptions -o test_re
+g++ ../../code/linux32_start.S ../../code/main.cpp $CompilerOptions -o re
+g++ ../../code/linux32_start.S ../../code/tests/tester.cpp -I../../code $CompilerOptions -o test_re

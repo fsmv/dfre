@@ -386,6 +386,9 @@ opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     return Result;
 }
 
+// See SizeOpcode(..). It is: 2 + 1 + 1 + 4 + 4 = 12
+#define MAX_OPCODE_LEN 12
+
 size_t SizeOpcode(opcode_unpacked Opcode) {
     size_t Result = 0;
     Result += (Opcode.Opcode[0] == 0) ? 1 : 2;
@@ -403,7 +406,6 @@ size_t SizeOpcode(opcode_unpacked Opcode) {
 
     return Result;
 }
-
 
 int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size_t JumpDestIdx) {
     size_t Start = 0, End = 0;
@@ -426,9 +428,6 @@ int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size
     }
     return Result;
 }
-
-// TODO Figure out what the actual max is, I think it's 6
-#define MAX_OPCODE_LEN 10
 
 void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opcode_unpacked *UnpackedOpcodes) {
     opcode_unpacked *NextOpcode = UnpackedOpcodes;

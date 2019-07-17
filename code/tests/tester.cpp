@@ -13,24 +13,29 @@
     #error "DFRE_WIN32, DFRE_NIX32, or DFRE_OSX32 must be defined to set the platform"
 #endif
 
+#include "printers.cpp"
+
 #include "print.h"
 #include "utils.h"
+#include "mem_arena.h"
 
-static bool failed = false;
-
-inline void TestFailed() {
-    failed = true;
-}
+struct tester_state {
+    bool Failed;
+    mem_arena Arena;
+};
 
 #include "tests/x86_opcode.cpp"
 
 int main(int argc, char *argv[]) {
-    x86_opcode_RunTests();
+    tester_state T;
+    T.Arena = ArenaInit();
 
-    if (failed) {
-        Print("\nAt least one test failed.\n");
+    x86_opcode_RunTests(&T);
+
+    if (T.Failed) {
+        Print("At least one test failed.\n");
         return 1;
     }
-    Print("\nAll tests passed!\n");
+    Print("All tests passed!\n");
     return 0;
 }

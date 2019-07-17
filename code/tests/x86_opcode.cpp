@@ -1,48 +1,93 @@
 // Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-#include "../x86_opcode.h"
-#include "../printers.cpp"
+#include "x86_opcode.h"
 
+#define WantOp(...) opcode_want{{__VA_ARGS__}, sizeof((uint8_t[]){__VA_ARGS__})}
 struct opcode_want {
     uint8_t Bytes[MAX_OPCODE_LEN];
     size_t Size;
 };
-
-#define WantOp(...) opcode_want{{__VA_ARGS__}, sizeof((uint8_t[]){__VA_ARGS__})}
 
 struct opcode_case {
     instruction Input;
     opcode_want Want;
 };
 
-void x86_opcode_RunTests() {
-    // TODO: Jumps, need to be a special case since they use Instruction indexes
-    /*
-        // All Jumps
-        // Declared with J (used to set the dest manually later) or JD
-        // Uses instruction index for offsets.
-        //  8bit jump opcodes
-        JD(JMP, 0),
-        JD(JNC, 0),
-        JD(JE , 0),
-        JD(JNE, 0),
-        JD(JL , 0),
-        JD(JG , 0),
-        //  32 bit jump opcodes
-        //  13 or more instructions distance is our heuristic for using 32 bit
-        JD(JMP, 20),
-        JD(JNC, 21),
-        JD(JE , 22),
-        JD(JNE, 23),
-        JD(JL , 24),
-        JD(JG , 25),
-    */
-    opcode_case Cases[] = {
-        // All No argument ops
-        // Encoded by OpNoarg(..)
-        {RET, WantOp(0xC3)},
+void TestOpcodes(tester_state *T, const char *Name, opcode_case *Cases, size_t NumCases) {
+    Print("%s\n", Name);
+    // AssembleInstructions needs a contiguous buffer because it fills in jump offsets.
+    instruction *Instructions = (instruction*)Alloc(&T->Arena, NumCases * sizeof(instruction));
+    for (size_t i = 0; i < NumCases; ++i) {
+        Instructions[i] = Cases[i].Input;
+    }
+    opcode_unpacked *Opcodes = (opcode_unpacked*)Alloc(&T->Arena, NumCases * sizeof(opcode_unpacked));
+    AssembleInstructions(Instructions, NumCases, Opcodes);
 
+    size_t PassCount = 0;
+    for (size_t i = 0; i < NumCases; ++i) {
+        uint8_t Got[MAX_OPCODE_LEN];
+        size_t GotLen = PackCode(&Opcodes[i], 1, Got);
+
+        // Make sure we don't overflow
+        if (GotLen > MAX_OPCODE_LEN) {
+            T->Failed = true;
+            Print("FAIL PackCode(NextOp) = %u bytes > MAX_OPCODE_LEN (%u)\n",
+                  GotLen, MAX_OPCODE_LEN);
+        }
+        // Sneak in a test of SizeOpcode to re-use the test data
+        size_t PredictedSize = SizeOpcode(Opcodes[i]);
+        if (PredictedSize != GotLen) {
+            T->Failed = true;
+            Print("FAIL SizeOpcode(NextOp) = %u bytes != PackCode(Op) = %u bytes\n",
+                  PredictedSize, GotLen);
+        }
+
+        // Easy way to see the output for new cases so I can double check with a disassembler
+        if (Cases[i].Want.Size == 0) {
+            PrintByteCode(Got, GotLen, false);
+            continue;
+        }
+
+        bool Passed = true;
+        if (GotLen != Cases[i].Want.Size) {
+            Passed = false;
+        }
+        for (size_t j = 0; Passed && j < GotLen; ++j) {
+            if (Got[j] != Cases[i].Want.Bytes[j]) {
+                Passed = false;
+                break;
+            }
+        }
+        if (Passed) {
+            PassCount += 1;
+            Print("PASS ");
+            PrintInstruction(&Cases[i].Input);
+            Print(" => ");
+            PrintByteCode(Got, GotLen, false);
+        } else {
+            T->Failed = true;
+            Print("FAIL ");
+            PrintInstruction(&Cases[i].Input);
+            Print(" => ");
+            PrintByteCode(Got, GotLen, false);
+            Print("; Wanted ");
+            PrintByteCode(Cases[i].Want.Bytes, Cases[i].Want.Size, false);
+        }
+    }
+    Print("%u / %u cases passed\n\n", PassCount, NumCases);
+}
+
+void TestOpNoarg(tester_state *T) {
+    opcode_case Cases[] = {
+        {RET, WantOp(0xC3)},
+    };
+    TestOpcodes(T, "OpNoarg(..) - All no argument opcodes", Cases, ArrayLength(Cases));
+}
+
+void TestOpReg(tester_state *T) {
+    // TODO: split this up more, or maybe print the comments??
+    opcode_case Cases[] = {
         // All single reg instructions
         // Declared with R8 and R32, encoded by OpReg(..)
         //  All ShortReg registers and addressing modes
@@ -67,6 +112,15 @@ void x86_opcode_RunTests() {
         {R32(POP, MEM, EBP, 0), WantOp(0x8F, 0x45, 0x00)}, // MEM && EBP is a special branch
         {R32(POP, MEM, ESI, 0), WantOp(0x8F, 0x06)},
         {R32(POP, MEM, EDI, 0), WantOp(0x8F, 0x07)},
+        //   32bit register direct non-ShortReg, all registers
+        {R32(NOT, REG, EAX, 0), WantOp(0xF7, 0xD0)},
+        {R32(NOT, REG, EBX, 0), WantOp(0xF7, 0xD3)},
+        {R32(NOT, REG, ECX, 0), WantOp(0xF7, 0xD1)},
+        {R32(NOT, REG, EDX, 0), WantOp(0xF7, 0xD2)},
+        {R32(NOT, REG, ESP, 0), WantOp(0xF7, 0xD4)},
+        {R32(NOT, REG, EBP, 0), WantOp(0xF7, 0xD5)},
+        {R32(NOT, REG, ESI, 0), WantOp(0xF7, 0xD6)},
+        {R32(NOT, REG, EDI, 0), WantOp(0xF7, 0xD7)},
         //   Cover each register class with displacement modes
         {R32(PUSH, MEM_DISP8 , EAX, 0xAC), WantOp(0xFF, 0x70, 0xAC)},
         {R32(PUSH, MEM_DISP8 , ESP, 0xAC), WantOp(0xFF, 0x74, 0x24, 0xAC)},
@@ -76,7 +130,7 @@ void x86_opcode_RunTests() {
         {R32(PUSH, MEM_DISP32, ESP, 0xBADF00D), WantOp(0xFF, 0xB4, 0x24, 0x0D, 0xF0, 0xAD, 0x0B)},
         {R32(PUSH, MEM_DISP32, EBP, 0xBADF00D), WantOp(0xFF, 0xB5, 0x0D, 0xF0, 0xAD, 0x0B)},
         {R32(PUSH, MEM_DISP32, ESI, 0xBADF00D), WantOp(0xFF, 0xB6, 0x0D, 0xF0, 0xAD, 0x0B)},
-        //  Remaining 32 bit non-ShortReg opcodes
+        //   Remaining 32 bit non-ShortReg opcodes
         {R32(INC, MEM, ESP, 0), WantOp(0xFF, 0x04, 0x24)},
         {R32(NOT, MEM, EDI, 0), WantOp(0xF7, 0x17)},
         //  8bit register direct non-ShortReg, all registers
@@ -88,7 +142,12 @@ void x86_opcode_RunTests() {
         //  Remaining 8bit register direct non-ShortReg opcodes
         //  PUSH and POP are not allowed (PUSH is possible but not implemented)
         {R8(INC, REG, EAX, 0), WantOp(0xFE, 0xC0)},
+    };
+    TestOpcodes(T, "OpReg(..) - All single register opcodes", Cases, ArrayLength(Cases));
+}
 
+void TestOpRegReg(tester_state *T) {
+    opcode_case Cases[] = {
         // All two register instructions
         // Declared with RR8 and RR32, and encoded by OpRegReg(..)
         //  All addressing modes and registers
@@ -156,58 +215,76 @@ void x86_opcode_RunTests() {
         {RR32(CMP , REG, EAX, EAX, 0), WantOp(0x39, 0xC0)},
         {RR32(MOV , REG, EAX, EAX, 0), WantOp(0x89, 0xC0)},
         {RR32(MOVR, MEM, EAX, EAX, 0), WantOp(0x8B, 0x00)}, // MEM To see if its actually reversed
-
-        // TODO RI8 and RI32 cases
     };
+    TestOpcodes(T, "OpRegReg(..) - All two register opcodes", Cases, ArrayLength(Cases));
+}
 
-    // AssembleInstructions needs a contiguous buffer because it fills in jump offsets.
-    // Too bad I can't make a struct of arrays and keep the want next to the input.
-    instruction Instructions[ArrayLength(Cases)];
-    for (size_t i = 0; i < ArrayLength(Cases); ++i) {
-        Instructions[i] = Cases[i].Input;
-    }
-    opcode_unpacked Opcodes[ArrayLength(Cases)];
-    AssembleInstructions(Instructions, ArrayLength(Instructions), Opcodes);
+void TestOpRegImm(tester_state *T) {
+    // TODO Finish RI8 and RI32 cases
+    opcode_case Cases[] = {
+        // All register immediate instructions
+        // Declared with RI8 and RI32, and encoded by OpRegImm(..)
+        //  All addressing modes and registers
+        //   All ShortReg registers and addressing modes. Only 32 bit MOV
+        {RI32(MOV, REG, EAX, /*disp*/0, /*imm*/0xAB),       {}},
+        {RI32(MOV, REG, ECX, /*disp*/0, /*imm*/0xABCD),     {}},
+        {RI32(MOV, REG, EDX, /*disp*/0, /*imm*/0xABCDEF),   {}},
+        {RI32(MOV, REG, EBX, /*disp*/0, /*imm*/0xBADF00D),  {}},
+        {RI32(MOV, REG, ESP, /*disp*/0, /*imm*/0xDEADBEEF), {}},
+        {RI32(MOV, REG, EBP, /*disp*/0, /*imm*/0xCAFE),     {}},
+        {RI32(MOV, REG, ESI, /*disp*/0, /*imm*/0xC0FEFEE),  {}},
+        {RI32(MOV, REG, EDI, /*disp*/0, /*imm*/0),          {}},
+        //   All 32bit non-ShortReg addressing modes and registers
+        //    Register dereference modes, every register
+        {RI32(MOV, MEM, EAX, /*disp*/0, /*imm*/0xAB),       {}},
+        {RI32(MOV, MEM, ECX, /*disp*/0, /*imm*/0xABCD),     {}},
+        {RI32(MOV, MEM, EDX, /*disp*/0, /*imm*/0xABCDEF),   {}},
+        {RI32(MOV, MEM, EBX, /*disp*/0, /*imm*/0xBADF00D),  {}},
+        {RI32(MOV, MEM, ESP, /*disp*/0, /*imm*/0xDEADBEEF), {}},
+        {RI32(MOV, MEM, EBP, /*disp*/0, /*imm*/0xCAFE),     {}},
+        {RI32(MOV, MEM, ESI, /*disp*/0, /*imm*/0xC0FEFEE),  {}},
+        {RI32(MOV, MEM, EDI, /*disp*/0, /*imm*/0xFFFFFFFF), {}},
+        //    Cover each register class with displacement modes
+        {RI32(MOV, MEM_DISP8,  EAX, /*disp*/0xEF,       /*imm*/0xAB),       {}},
+        {RI32(MOV, MEM_DISP8,  ECX, /*disp*/0xCD,       /*imm*/0xABCD),     {}},
+        {RI32(MOV, MEM_DISP8,  EDX, /*disp*/0xAB,       /*imm*/0xABCDEF),   {}},
+        {RI32(MOV, MEM_DISP8,  EBX, /*disp*/0x12,       /*imm*/0xBADF00D),  {}},
+        // Largest encodable instruction (until we add a two byte opcode)
+        {RI32(MOV, MEM_DISP32, ESP, /*disp*/0xABABABAB, /*imm*/0xDEADBEEF), {}},
+        {RI32(MOV, MEM_DISP32, EBP, /*disp*/0xF00DF00D, /*imm*/0xCAFE),     {}},
+        {RI32(MOV, MEM_DISP32, ESI, /*disp*/0xAABB,     /*imm*/0xC0FEFEE),  {}},
+        {RI32(MOV, MEM_DISP32, EDI, /*disp*/0xABCDEF,   /*imm*/0xFFFFFFFF), {}},
+        //    32bit register direct non-ShortReg, all registers
+        {RI8(MOV, REG, EAX, /*disp*/0, /*imm*/0), {}},
+    };
+    TestOpcodes(T, "OpRegImm(..) - All register, immediate opcodes", Cases, ArrayLength(Cases));
+}
 
-    size_t PassCount = 0;
-    for (size_t i = 0; i < ArrayLength(Cases); ++i) {
-        uint8_t Got[MAX_OPCODE_LEN];
-        size_t GotLen = PackCode(&Opcodes[i], 1, Got);
+void x86_opcode_RunTests(tester_state *T) {
+    TestOpNoarg(T);
+    TestOpReg(T);
+    TestOpRegReg(T);
+    TestOpRegImm(T);
 
-        // Easy way to see the output for new cases so I can double check with a disassembler
-        if (Cases[i].Want.Size == 0) {
-            PrintByteCode(Got, GotLen, false);
-            Print("\n");
-            continue;
-        }
-
-        bool Passed = true;
-        if (GotLen != Cases[i].Want.Size) {
-            Passed = false;
-        }
-        for (size_t j = 0; Passed && j < GotLen; ++j) {
-            if (Got[j] != Cases[i].Want.Bytes[j]) {
-                Passed = false;
-                break;
-            }
-        }
-        if (Passed) {
-            PassCount += 1;
-            Print("PASS ");
-            PrintInstruction(&Cases[i].Input);
-            Print(" => ");
-            PrintByteCode(Got, GotLen, false);
-            Print("\n");
-        } else {
-            TestFailed();
-            Print("FAIL ");
-            PrintInstruction(&Cases[i].Input);
-            Print(" => ");
-            PrintByteCode(Got, GotLen, false);
-            Print("; Wanted ");
-            PrintByteCode(Cases[i].Want.Bytes, Cases[i].Want.Size, false);
-            Print("\n");
-        }
-    }
-    Print("%u / %u cases passed\n", PassCount, ArrayLength(Cases));
+    // TODO: Jumps, need to be a special case since they use Instruction indexes
+    /*
+        // All Jumps
+        // Declared with J (used to set the dest manually later) or JD
+        // Uses instruction index for offsets.
+        //  8bit jump opcodes
+        JD(JMP, 0),
+        JD(JNC, 0),
+        JD(JE , 0),
+        JD(JNE, 0),
+        JD(JL , 0),
+        JD(JG , 0),
+        //  32 bit jump opcodes
+        //  13 or more instructions distance is our heuristic for using 32 bit
+        JD(JMP, 20),
+        JD(JNC, 21),
+        JD(JE , 22),
+        JD(JNE, 23),
+        JD(JL , 24),
+        JD(JG , 25),
+    */
 }
