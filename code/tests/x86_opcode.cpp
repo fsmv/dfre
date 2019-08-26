@@ -2,6 +2,7 @@
 // Provided under the MIT License: https://mit-license.org
 
 #include "x86_opcode.h"
+#include "mem_arena.h"
 
 #define WantOp(...) opcode_want{{__VA_ARGS__}, sizeof((uint8_t[]){__VA_ARGS__})}
 struct opcode_want {
@@ -521,27 +522,44 @@ void TestOpRegImm(tester_state *T) {
 }
 
 void TestOpJump(tester_state *T) {
-    // TODO: Jumps, need to be a special case since they use Instruction indexes
-    /*
-        // All Jumps
-        // Declared with J (used to set the dest manually later) or JD
-        // Uses instruction index for offsets.
-        //  8bit jump opcodes
-        JD(JMP, 0),
-        JD(JNC, 0),
-        JD(JE , 0),
-        JD(JNE, 0),
-        JD(JL , 0),
-        JD(JG , 0),
-        //  32 bit jump opcodes
-        //  13 or more instructions distance is our heuristic for using 32 bit
-        JD(JMP, 20),
-        JD(JNC, 21),
-        JD(JE , 22),
-        JD(JNE, 23),
-        JD(JL , 24),
-        JD(JG , 25),
-    */
+    {
+        opcode_case Cases[] = {
+            {JD(JMP, /*instrIdx=*/5), WantOp(0xEB, 0x08)},
+            {JD(JNC, /*instrIdx=*/4), WantOp(0x73, 0x04)},
+            {JD(JE , /*instrIdx=*/2), WantOp(0x74, 0xFE)},
+            {JD(JNE, /*instrIdx=*/1), WantOp(0x75, 0xFA)},
+            {JD(JL , /*instrIdx=*/0), WantOp(0x7C, 0xF6)},
+            {JD(JG , /*instrIdx=*/3), WantOp(0x7F, 0xFA)},
+        };
+        TestOpcodes(T, "OpJump8(..) - All 8 bit jumps with offset", 0, Cases, ArrayLength(Cases));
+    }
+    {
+        opcode_case Cases[] = {
+            {JD(JMP, /*instrIdx=*/14), WantOp(0xE9, 0x22, 0x00, 0x00, 0x00)},
+            {JD(JNC, /*instrIdx=*/15), WantOp(0x0F, 0x83, 0x22, 0x00, 0x00, 0x00)},
+            {JD(JE , /*instrIdx=*/16), WantOp(0x0F, 0x84, 0x22, 0x00, 0x00, 0x00)},
+
+            // Filler instructions to jump past
+            // Need 11 because 11 * MAX_OPCODE_LEN > 128, that's when it switches to 32 bit
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+            {RR8(XOR , REG, EAX, EAX, 0), WantOp(0x30, 0xC0)},
+
+            {JD(JNE, /*instrIdx=*/0), WantOp(0x0F, 0x85, 0xD3, 0xFF, 0xFF, 0xFF)},
+            {JD(JL , /*instrIdx=*/1), WantOp(0x0F, 0x8C, 0xD2, 0xFF, 0xFF, 0xFF)},
+            {JD(JG , /*instrIdx=*/2), WantOp(0x0F, 0x8F, 0xD2, 0xFF, 0xFF, 0xFF)},
+        };
+        TestOpcodes(T, "OpJump32(..) - All 32 bit jumps with offset (plus some filler instructions)", 0, Cases, ArrayLength(Cases));
+    }
+    // Note the J(..) macro isn't tested because it is just JD but with 0 offset (for filling later)
 }
 
 void x86_opcode_RunTests(tester_state *T) {

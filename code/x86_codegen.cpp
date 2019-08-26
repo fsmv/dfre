@@ -4,6 +4,7 @@
 #include "nfa.h"
 #include "x86_opcode.h"
 
+// For writing instrucions to an arena
 #define NextInstr() (*((instruction*)(Alloc(Arena, sizeof(instruction)))))
 #define PeekIdx() (Arena->Used / sizeof(instruction))
 #define Instr(idx) ((instruction*)(Arena->Base) + idx)

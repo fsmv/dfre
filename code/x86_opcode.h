@@ -419,10 +419,10 @@ size_t SizeOpcode(opcode_unpacked Opcode) {
 
 int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size_t JumpDestIdx) {
     size_t Start = 0, End = 0;
-    if (JumpDestIdx < JumpIdx) { // backwards
+    if (JumpDestIdx <= JumpIdx) { // backwards
         Start = JumpDestIdx;
         End = JumpIdx + 1;
-    } else { // forwards (or equal)
+    } else { // forwards
         Start = JumpIdx + 1;
         End = JumpDestIdx;
     }
@@ -433,7 +433,7 @@ int32_t ComputeJumpOffset(opcode_unpacked *UnpackedOpcodes, size_t JumpIdx, size
     }
 
     int32_t Result = (int32_t) JumpOffset;
-    if (JumpDestIdx < JumpIdx) { // backwards
+    if (JumpDestIdx <= JumpIdx) { // backwards
         Result *= -1;
     }
     return Result;
@@ -446,7 +446,8 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
 
         switch(Inst->Type) {
             case JUMP: {
-                int32_t JumpDist = (int32_t) (Inst->JumpDestIdx - Idx);
+                // Idx+1 because the jump is relative to the end of this instr
+                int32_t JumpDist = (int32_t) (Inst->JumpDestIdx - (Idx + 1));
                 // We don't know how big the ops between here and the dest are yet
                 int32_t JumpOffsetUpperBound = JumpDist * MAX_OPCODE_LEN;
 
@@ -475,6 +476,7 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
     for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
         instruction *Inst = &Instructions[Idx];
         if (Inst->Type == JUMP) {
+            Assert(Inst->JumpDestIdx < NumInstructions);
             int32_t JumpOffset = ComputeJumpOffset(UnpackedOpcodes, Idx, Inst->JumpDestIdx);
 
             if (UnpackedOpcodes[Idx].ImmCount == 1) {
@@ -532,17 +534,20 @@ size_t PackCode(opcode_unpacked *Opcodes, size_t NumOpcodes, uint8_t *Dest) {
     return (size_t)(Dest - DestStart);
 }
 
+// Declare single register argument instructions
 #define R8(op, mode, reg, disp) (instruction{(mode), (op), ONE_REG, (reg),  R_NONE, false, 0, (int32_t)(disp), 0})
 #define R32(op, mode, reg, disp) (instruction{(mode), (op), ONE_REG, (reg), R_NONE, true, 0, (int32_t)(disp), 0})
-
+// Declare two register argument instructions
 #define RR8(op, mode, dest, src, disp) (instruction{(mode), (op), TWO_REG, (dest), (src), false, 0, (int32_t)(disp), 0})
 #define RR32(op, mode, dest, src, disp) (instruction{(mode), (op), TWO_REG, (dest), (src), true, 0, (int32_t)(disp), 0})
-
+// Declare register and an immediate value argument instructions
 #define RI8(op, mode, dest, disp, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, false, (uint32_t)(imm), (int32_t)(disp), 0})
 #define RI32(op, mode, dest, disp, imm) (instruction{(mode), (op), REG_IMM, (dest), R_NONE, true, (uint32_t)(imm), (int32_t)(disp), 0})
-#define J(op) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0, 0})
-#define JD(op, dest) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0, (dest)})
-
+// Declare a jump to an instruction index in the innstructions array
+#define JD(op, instrIdx) (instruction{MODE_NONE, (op), JUMP, R_NONE, R_NONE, false, 0, 0, (instrIdx)})
+// Declare a jump with destination to be filled later (Use PeekIdx())
+#define J(op) JD((op), 0)
+// Declare ret, the only instruction we support with no args
 #define RET (instruction{MODE_NONE, RET, NOARG, R_NONE, R_NONE, false, 0, 0, 0})
 
 #define X86_OPCODE_H_
