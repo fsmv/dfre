@@ -289,11 +289,11 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
 
     if (!is16) {
         Assert(SrcReg != ESP && SrcReg != EBP && SrcReg != ESI && SrcReg != EDI);
-    }
-    if (Mode == REG && !is16) {
-        // These would encode AH, CD, DH, BH respectively
-        // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
-        Assert(DestReg != ESP && DestReg != EBP && DestReg != ESI && DestReg != EDI);
+        if (Mode == REG) {
+            // These would encode AH, CD, DH, BH respectively
+            // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
+            Assert(DestReg != ESP && DestReg != EBP && DestReg != ESI && DestReg != EDI);
+        }
     }
     if (Mode == MEM || Mode == MEM_DISP8 || Mode == MEM_DISP32) {
         // See Section 2.1.5 Table 2-3
@@ -461,6 +461,7 @@ void AssembleInstructions(instruction *Instructions, size_t NumInstructions, opc
         }
     }
 
+    // Fill in the jump offset values (in bytes)
     for (size_t Idx = 0; Idx < NumInstructions; ++Idx) {
         instruction *Inst = &Instructions[Idx];
         if (Inst->Type == JUMP) {

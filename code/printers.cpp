@@ -166,7 +166,7 @@ void PrintUnpackedOpcodes(opcode_unpacked *Opcodes, size_t NumOpcodes) {
           "has real x86 codes instead of our enums.\n");
 }
 
-void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true) {
+void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true, bool PrintNewlines = true) {
     if (PrintSize) {
         Print("Size: %u Bytes\n\n", Size);
     }
@@ -183,7 +183,7 @@ void PrintByteCode(uint8_t *Code, size_t Size, bool PrintSize = true) {
         IntStr[3] = '\0';
 
         Print(IntStr);
-        if ((i + 1) % 16 == 0 || i + 1 == Size) {
+        if (PrintNewlines && ((i + 1) % 16 == 0 || i + 1 == Size)) {
             Print("\n");
         }
     }
