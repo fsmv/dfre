@@ -270,12 +270,15 @@ opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement
         if (Mode == MEM_DISP8) {
             Result.DispCount = 1;
             Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
+            Assert((Displacement & 0xFFFFFF00) == 0);
         } else if (Mode == MEM_DISP32) {
             Result.DispCount = 4;
             Result.Displacement[0] = (uint8_t) (Displacement &       0xFF);
             Result.Displacement[1] = (uint8_t)((Displacement &     0xFF00) >>  8);
             Result.Displacement[2] = (uint8_t)((Displacement &   0xFF0000) >> 16);
             Result.Displacement[3] = (uint8_t)((Displacement & 0xFF000000) >> 24);
+        } else {
+            Assert(Displacement == 0);
         }
     }
 
@@ -317,12 +320,15 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
     if (Mode == MEM_DISP8) {
         Result.DispCount = 1;
         Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
+        Assert((Displacement & 0xFFFFFF00) == 0);
     } else if (Mode == MEM_DISP32) {
         Result.DispCount = 4;
         Result.Displacement[0] = (uint8_t) (Displacement &       0xFF);
         Result.Displacement[1] = (uint8_t)((Displacement &     0xFF00) >>  8);
         Result.Displacement[2] = (uint8_t)((Displacement &   0xFF0000) >> 16);
         Result.Displacement[3] = (uint8_t)((Displacement & 0xFF000000) >> 24);
+    } else {
+        Assert(Displacement == 0);
     }
 
     return Result;
@@ -348,7 +354,7 @@ opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
                 // [EBX] is not encodable without a 0 displacement
                 // See Table 2-2
                 Mode = MEM_DISP8;
-                Displacement = 0;
+                Assert(Displacement == 0);
             }
         }
 
@@ -364,12 +370,15 @@ opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
         if (Mode == MEM_DISP8) {
             Result.DispCount = 1;
             Result.Displacement[0] = (uint8_t) (Displacement & 0xFF);
+            Assert((Displacement & 0xFFFFFF00) == 0);
         } else if (Mode == MEM_DISP32) {
             Result.DispCount = 4;
             Result.Displacement[0] = (uint8_t) (Displacement &       0xFF);
             Result.Displacement[1] = (uint8_t)((Displacement &     0xFF00) >>  8);
             Result.Displacement[2] = (uint8_t)((Displacement &   0xFF0000) >> 16);
             Result.Displacement[3] = (uint8_t)((Displacement & 0xFF000000) >> 24);
+        } else {
+            Assert(Displacement == 0);
         }
     }
     if (is16) {
@@ -380,7 +389,8 @@ opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
         Result.Immediate[3] = (uint8_t)((Imm & 0xFF000000) >> 24);
     } else {
         Result.ImmCount = 1;
-        Result.Immediate[0] = (uint8_t) (Imm &       0xFF);
+        Result.Immediate[0] = (uint8_t) (Imm & 0xFF);
+        Assert((Imm & 0xFFFFFF00) == 0);
     }
 
     return Result;

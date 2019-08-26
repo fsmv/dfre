@@ -27,7 +27,7 @@ struct tester_state {
 #include "tests/x86_opcode.cpp"
 
 int main(int argc, char *argv[]) {
-    tester_state T;
+    tester_state T = {};
     T.Arena = ArenaInit();
 
     x86_opcode_RunTests(&T);
