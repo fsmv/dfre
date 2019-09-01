@@ -1,8 +1,79 @@
 // Copyright (c) 2016-2019 Andrew Kallmeyer <fsmv@sapium.net>
 // Provided under the MIT License: https://mit-license.org
 
-#define Write(str, len) write(1, (str), (len))
-#define Exit(code) exit((code))
+#include "platform.h"
+
+#include <sys/syscall.h>
+#include <sys/types.h>
+
+#define IsError(err) ((uint32_t)(err) > (uint32_t)-4096)
+#define Errno(err) (-(int32_t)(err))
+
+extern "C" {
+    uint32_t syscall1(uint32_t call, void*);
+    uint32_t syscall2(uint32_t call, void*, void*);
+    uint32_t syscall3(uint32_t call, void*, void*, void*);
+    uint32_t syscall4(uint32_t call, void*, void*, void*, void*);
+    uint32_t syscall5(uint32_t call, void*, void*, void*, void*, void*);
+    uint32_t syscall6(uint32_t call, void*, void*, void*, void*, void*, void*);
+
+    inline void exit(int retcode) {
+        syscall1(SYS_exit, (void*)retcode);
+        __builtin_unreachable();
+    }
+
+    inline int32_t write(int fd, const void *buf, size_t length) {
+        return syscall3(SYS_write, (void*)fd, (void*)buf, (void*)length);
+    }
+
+    inline int munmap(void *addr, size_t length) {
+        return (int)syscall2(SYS_munmap, (void*)addr, (void*)length);
+    }
+
+    inline void *mmap(void *addr, size_t length, int prot,
+                      int flags, int fd, off_t offset) {
+#if defined(DFRE_NIX32)
+        // Actually takes a pointer to the arguments on the stack for some reason
+        return (void*)syscall1(SYS_mmap, (void*)&addr);
+#elif defined(DFRE_OSX32)
+        return (void*)syscall6(SYS_mmap, addr, (void*)length, (void*)prot,
+                               (void*)flags, (void*)fd, (void*)offset);
+#endif
+    }
+
+    inline int mprotect(void *addr, size_t length, int prot) {
+        return (int)syscall3(SYS_mprotect, (void*)addr, (void*)length,
+                             (void*)prot);
+    }
+}
+
+inline uint32_t Write(const char *Str, size_t Len) {
+    return write(1, Str, Len);
+}
+
+inline void Exit(int Code) {
+    exit(Code);
+}
+
+#include "utils.h" // MemCopy
+
+// Clang puts in calls to these and there's apparently no way to turn it off
+#if defined(DFRE_OSX32)
+extern "C" {
+    void* memset(void *addr, int val, size_t length) {
+        uint8_t *d = (uint8_t*)addr;
+        for (; length; length--, d++) {
+            *d = val;
+        }
+        return addr;
+    }
+
+    void* memcpy(void *dest, const void *src, size_t length) {
+        MemCopy(dest, src, length);
+        return dest;
+    }
+}
+#endif
 
 #include <sys/mman.h> // for mmap flag constants
 #include "print.h"
@@ -13,7 +84,18 @@
 const size_t PAGE_SIZE = (4 * 1024);
 const size_t RESERVE_GRANULARITY = PAGE_SIZE;
 
-// See mem_arena.h for documentation
+void *LoadCode(uint8_t *Code, size_t CodeWritten) {
+    void *CodeExe = mmap(0, CodeWritten, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (IsError(CodeExe)) {
+        Print("Failed to load code. errno = %u\n", Errno(CodeExe));
+        return 0;
+    }
+    MemCopy(CodeExe, Code, CodeWritten);
+    // TODO: check error
+    mprotect(CodeExe, CodeWritten, PROT_EXEC | PROT_READ);
+    return CodeExe;
+}
+
 void *Reserve(void *addr, size_t size) {
     // > [man 2 mmap]
     // > MAP_PRIVATE
@@ -38,7 +120,6 @@ void *Reserve(void *addr, size_t size) {
     return Ret;
 }
 
-// See mem_arena.h for documentation
 bool Commit(void *addr, size_t size) {
     // On linux, this is just allowing read and write. This is because virtual
     // memory in linux is copy on write. That means technically the memory doesn't
@@ -54,7 +135,6 @@ bool Commit(void *addr, size_t size) {
     return true;
 }
 
-// See mem_arena.h for documentation
 void Free(void *addr, size_t size) {
     // > [man 2 munmap]
     // > The address addr must be a multiple of the page size (but length need
@@ -69,66 +149,3 @@ void Free(void *addr, size_t size) {
     }
 }
 
-#include "mem_arena.h"
-
-// See mem_arena.h for documentation
-//
-// POSIX version allows us to sometimes avoid a copy if we can just reserve the
-// space right after what we already have.
-bool Expand(mem_arena *Arena) {
-    const size_t AmountToCommit = PAGE_SIZE;
-    size_t NewCommitted = Arena->Committed + AmountToCommit;
-    if (NewCommitted > Arena->Reserved) {
-        // Try to reserve the reserved size after the existing pointer
-        size_t NewReserved = Arena->Reserved * 2;
-        void *AppendAddr = (void*)(Arena->Base + Arena->Reserved);
-        void *AppendedReserve = Reserve(AppendAddr, Arena->Reserved);
-        if (AppendedReserve == AppendAddr) {
-            Arena->Reserved = NewReserved;
-            // Fallthrough to the code to commit one more page
-        } else { // Could not append reserved pages, must do a copy
-            if (AppendedReserve) {
-                // [man 2 mmap]
-                // > If addr is not NULL, then the kernel takes it as a hint
-                // > about where to place the mapping; on Linux, the mapping
-                // > will be created at a nearby page boundary.
-                //
-                // It's possible we got a reservation but not at the exact
-                // address we wanted. So free it because we can't use it.
-                Free(AppendedReserve, Arena->Reserved);
-            }
-            uint8_t *NewBase = (uint8_t*)Reserve(0, NewReserved);
-            if (!NewBase) {
-                return false;
-            }
-            if (!Commit(NewBase, NewCommitted)) {
-                Free(NewBase, NewReserved);
-                return false;
-            }
-            MemCopy(NewBase, Arena->Base, Arena->Used);
-            Free(Arena->Base, Arena->Reserved);
-            Arena->Base = NewBase;
-            Arena->Reserved = NewReserved;
-            Arena->Committed = NewCommitted;
-            return true; // Saved a syscall by doing the whole commit in one go
-        }
-    }
-    // We have room, just commit the next page
-    if (!Commit((Arena->Base + Arena->Committed), AmountToCommit)) {
-        return false;
-    }
-    Arena->Committed = NewCommitted;
-    return true;
-}
-
-void *LoadCode(uint8_t *Code, size_t CodeWritten) {
-    void *CodeExe = mmap(0, CodeWritten, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (IsError(CodeExe)) {
-        Print("Failed to load code. errno = %u\n", Errno(CodeExe));
-        return 0;
-    }
-    MemCopy(CodeExe, Code, CodeWritten);
-    // TODO: check error
-    mprotect(CodeExe, CodeWritten, PROT_EXEC | PROT_READ);
-    return CodeExe;
-}

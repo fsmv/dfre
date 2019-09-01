@@ -3,10 +3,7 @@
 
 #ifndef PRINT_H_
 #include <stdarg.h> // varargs defines
-
-#if !defined(Write)
-    #error "Write(char *str, int len) macro must be defined (in the *_platform file)"
-#endif
+#include "platform.h" // Write(..)
 
 // If we ever need signed, add one more for the sign
 #define BASE10_MAX_INT_STR 10

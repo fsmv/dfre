@@ -25,16 +25,22 @@
  * memory.
  */
 
-#include <stdint.h> // int32_t etc
 #include <windows.h>
 #include <memoryapi.h>
 
-static HANDLE Out; // Initialized in mainCRTStartup()
+static HANDLE Out; // Initialized in mainCRTStartup(..)
 static DWORD TempCharsWritten;
-#define Write(str, len) (WriteConsoleA(Out, (str), (DWORD)(len), &TempCharsWritten, 0), \
-                         (uint32_t)TempCharsWritten)
-#define Exit(code) ExitProcess((code))
+inline uint32_t Write(const char *Str, size_t Len) {
+    WriteConsoleA(Out, Str, (DWORD) Len, &TempCharsWritten, 0);
+    return (uint32_t)TempCharsWritten;
+}
 
+inline void Exit(int Code) {
+    ExitProcess((code))
+}
+
+// Loaded with GetSystemInfo(&SysInfo); in mainCRTStartup(..) below
+//
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa366887(v=vs.85).aspx
 //
 // > If the memory is being reserved, the specified address is rounded down to
@@ -80,44 +86,6 @@ void Free(void *addr, size_t size) {
         Print("Failed to free memory (%u bytes). Windows Error Code: %u\n",
               size, Code);
     }
-}
-
-#include "mem_arena.h"
-
-// See mem_arena.h for documentation
-//
-// On Windows we always have to copy when we run out of reserved space. The
-// entire arena alwasy has to be one Reservation because of the behavior of
-// VirtualFree.
-bool Expand(mem_arena *Arena) {
-    const size_t AmountToCommit = PAGE_SIZE;
-    size_t NewCommitted = Arena->Committed + AmountToCommit;
-    if (NewCommitted > Arena->Reserved) {
-        // Reserve twice the size
-        size_t NewReserved = Arena->Reserved * 2;
-        uint8_t *NewBase = (uint8_t*)Reserve(0, NewReserved);
-        if (!NewBase) {
-            return false;
-        }
-        // Commit the new size we want committed
-        if (!Commit(NewBase, NewCommitted)) {
-            Free(NewBase, NewReserved);
-            return false;
-        }
-        // Copy over existing data and clean up
-        MemCopy(NewBase, Arena->Base, Arena->Used);
-        Free(Arena->Base, Arena->Reserved);
-        Arena->Base = NewBase;
-        Arena->Reserved = NewReserved;
-        Arena->Committed = NewCommitted;
-    } else {
-        // We have room, just commit the next page
-        if (!Commit((Arena->Base + Arena->Committed), AmountToCommit)) {
-            return false;
-        }
-        Arena->Committed = NewCommitted;
-    }
-    return true;
 }
 
 void *LoadCode(uint8_t *Code, size_t CodeWritten) {
@@ -166,8 +134,6 @@ char **ParseArgs(char *CommandLine, size_t *NumArgs) {
     }
     return Argv;
 }
-
-extern "C" int main(int argc, char *argv[]);
 
 // Not using the CRT, for fun I guess. The binary is smaller!
 // The entry point. For people who search: main(int argc, char *argv[])

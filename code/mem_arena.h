@@ -3,28 +3,8 @@
 
 #ifndef MEM_ARENA_H_
 
+#include "platform.h"
 #include "utils.h"
-
-// Minimum size of a memory block that can be committed or reserved.
-// Blocks are aligned to addresses that are multiples of PAGE_SIZE.
-extern const size_t PAGE_SIZE;
-// Minimum size of a memory block that can be reserved.
-// Reservations are aligned to address that are multiples of RESERVE_GRANULARITY
-extern const size_t RESERVE_GRANULARITY;
-
-// Reserve address space without requiring physical memory backing it.
-void *Reserve(void *addr, size_t size);
-// Commit to requiring physical memory to back this reserved address space.
-// The memory is initialized to zero.
-bool Commit(void *addr, size_t size);
-// Deallocate any pages in the range. Uncommits and Unreserves.
-// addr and size must be muliple of PAGE_SIZE
-//
-// Free must be called on the entire result of each Reserve call (even if a
-// contiguous range was created from multiple Reserve calls). This is due to
-// Windows having this restriction, even though POSIX can Free any arbitary
-// range of pages.
-void Free(void *addr, size_t size);
 
 // An expanding contiguous memory block allocator
 //
@@ -82,7 +62,73 @@ void ArenaFree(mem_arena *Arena) {
 //
 // Implemented in the platform layer since POSIX platforms can sometimes avoid
 // copies where Windows can't.
-bool Expand(mem_arena *Arena);
+//
+// POSIX version allows us to sometimes avoid a copy if we can just reserve the
+// space right after what we already have.
+//
+// On Windows we always have to copy when we run out of reserved space. The
+// entire arena always has to be one Reservation because of the behavior of
+// VirtualFree.
+//
+// TODO: This should probably accept an amount to expand by and allocate enough
+//       pages to fit that in one go
+bool Expand(mem_arena *Arena) {
+    const size_t AmountToCommit = PAGE_SIZE;
+    size_t NewCommitted = Arena->Committed + AmountToCommit;
+
+    // If we have room, just commit the next page
+    if (NewCommitted <= Arena->Reserved) {
+        if (!Commit((Arena->Base + Arena->Committed), AmountToCommit)) {
+            return false;
+        }
+        Arena->Committed = NewCommitted;
+        return true;
+    }
+
+    // We want to have twice the reservation size we have now
+    size_t NewReserved = Arena->Reserved * 2;
+#if DFRE_NIX32 || DFRE_OSX32
+    // Try to reserve the extra amount needed immediately after the existing pointer
+    void *AppendAddr = (void*)(Arena->Base + Arena->Reserved);
+    void *AppendedReserve = Reserve(AppendAddr, Arena->Reserved);
+    if (AppendedReserve == AppendAddr) {
+        // It worked! Now commit the next page.
+        Arena->Reserved = NewReserved;
+        if (!Commit((Arena->Base + Arena->Committed), AmountToCommit)) {
+            return false;
+        }
+        Arena->Committed = NewCommitted;
+        return true;
+    } // Could not append reserved pages, must do a copy
+
+    // It's possible we got a reservation but not at the exact address we
+    // wanted. So free it because we can't use it.
+    //
+    // [man 2 mmap]
+    // > If addr is not NULL, then the kernel takes it as a hint
+    // > about where to place the mapping; on Linux, the mapping
+    // > will be created at a nearby page boundary.
+    if (AppendedReserve) {
+        Free(AppendedReserve, Arena->Reserved);
+    }
+#endif
+
+    // No more options, we're doing a whole new reserve and copy
+    uint8_t *NewBase = (uint8_t*)Reserve(0, NewReserved);
+    if (!NewBase) {
+        return false;
+    }
+    if (!Commit(NewBase, NewCommitted)) {
+        Free(NewBase, NewReserved);
+        return false;
+    }
+    MemCopy(NewBase, Arena->Base, Arena->Used);
+    Free(Arena->Base, Arena->Reserved);
+    Arena->Base = NewBase;
+    Arena->Reserved = NewReserved;
+    Arena->Committed = NewCommitted;
+    return true;
+}
 
 // Allocate space for NumBytes at the end of the data block in the mem_arena.
 // Returns a pointer to the start of the newly allocated portion.
@@ -99,14 +145,6 @@ void *Alloc(mem_arena *Arena, size_t NumBytes) {
     void *Result = (void*)(Arena->Base + Arena->Used);
     Arena->Used += NumBytes;
     return Result;
-}
-
-void MemCopy(void *Dest, void *Src, size_t NumBytes) {
-    uint8_t *DestB = (uint8_t *) Dest;
-    uint8_t *SrcB = (uint8_t *) Src;
-    for (size_t Copied = 0; Copied < NumBytes; ++Copied) {
-        *DestB++ = *SrcB++;
-    }
 }
 
 #define MEM_ARENA_H_
