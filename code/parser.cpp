@@ -110,7 +110,7 @@ struct chunk_bounds {
     uint32_t EndState;
 };
 
-nfa *RegexToNFA(char *Regex, mem_arena *Arena) {
+nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
     Alloc(Arena, sizeof(nfa));
     nfa *NFA = (nfa *) Arena->Base;
 

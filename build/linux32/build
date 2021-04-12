@@ -3,6 +3,7 @@
 CompilerOptions="-DDFRE_NIX32 "
 CompilerOptions+="-fno-exceptions -fno-asynchronous-unwind-tables "
 CompilerOptions+="-fno-stack-protector "
+CompilerOptions+="-fno-threadsafe-statics "
 CompilerOptions+="-m32 "
 CompilerOptions+="-Wall -Werror -Wextra "
 CompilerOptions+="-Wno-unused-parameter "
@@ -15,4 +16,4 @@ else
 fi
 
 g++ ../../code/linux32_start.S ../../code/main.cpp $CompilerOptions -o re
-g++ ../../code/linux32_start.S ../../code/tests/tester.cpp -I../../code $CompilerOptions -o test_re
+g++ ../../code/linux32_start.S ../../code/tests/tester.cpp -I../../code -g $CompilerOptions -o test_re

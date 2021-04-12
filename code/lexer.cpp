@@ -2,11 +2,11 @@
 // Provided under the MIT License: https://mit-license.org
 
 struct lexer_state {
-    char *Pos;
+    const char *Pos;
 };
 
 struct token {
-    char *Str;
+    const char *Str;
     int32_t Length;
 };
 
@@ -38,7 +38,7 @@ token LexNext(lexer_state *State) {
         } break;
         case '[': {
             // Skip to the ']' or end of string also handle escaping ']'
-            char *Str;
+            const char *Str;
             for (Str = State->Pos;
                  (*Str != ']' || *(Str-1) == ESCAPE_CHAR) && *(Str+1) != '\0';
                  ++Str) {}
