@@ -59,6 +59,10 @@ dfreMatch CompileRegex(const char *Regex, size_t *CodeSize) {
    } \
 } while(false)
 
+// TODO: Maybe it could work to have a flat list of cases and deduplicate the
+// compiled regex by using the same pointer for the regex field and checking for
+// it changing. Is that better though?
+
 void end_to_end_RunTests(tester_state *T) {
     size_t CodeSize;
 
@@ -82,6 +86,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("42");
         EXPECT_NO_MATCH("bbbbb");
         EXPECT_NO_MATCH("b");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "ab*";
@@ -100,6 +106,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("42");
         EXPECT_NO_MATCH("bbbbb");
         EXPECT_NO_MATCH("b");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "ab+";
@@ -118,6 +126,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("42");
         EXPECT_NO_MATCH("bbbbb");
         EXPECT_NO_MATCH("b");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "ab?";
@@ -136,6 +146,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("abb");
         EXPECT_NO_MATCH("abbbbbbbbbb");
         EXPECT_NO_MATCH("abbbbb");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "a|b";
@@ -154,6 +166,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("abb");
         EXPECT_NO_MATCH("abbbbbbbbbb");
         EXPECT_NO_MATCH("abbbbb");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "..";
@@ -176,6 +190,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("aba");
         EXPECT_NO_MATCH("abbbba");
         EXPECT_NO_MATCH("bbbbb");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "[abc]";
@@ -193,6 +209,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("aba");
         EXPECT_NO_MATCH("abbbba");
         EXPECT_NO_MATCH("bbbbb");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "[a-z]";
@@ -219,6 +237,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("aba");
         EXPECT_NO_MATCH("abbbba");
         EXPECT_NO_MATCH("bbbbb");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "[a-g2-6]";
@@ -244,6 +264,8 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("testa");
         EXPECT_NO_MATCH("atest");
         EXPECT_NO_MATCH("aba");
+
+        Free((void*)Match, CodeSize);
     }
     {
         const char *Regex = "(ab)*";
@@ -267,5 +289,7 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_NO_MATCH("\n");
         EXPECT_NO_MATCH("testa");
         EXPECT_NO_MATCH("atest");
+
+        Free((void*)Match, CodeSize);
     }
 }
