@@ -127,6 +127,9 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
     // LastChunk.StartState == NFA_NULLSTATE means the last chunk cannot be looped
     chunk_bounds LastChunk{NFA_NULLSTATE, NFA_STARTSTATE};
     chunk_bounds ParenChunks[32];
+    // TODO: when we have error reporting, we should check that this is 0 at the
+    // end. Currently we just ignore this and we compile the regex anyway, it
+    // results in prentending the open paren is not there at all.
     size_t NumOpenParens = 0;
 
     lexer_state Lexer{Regex};

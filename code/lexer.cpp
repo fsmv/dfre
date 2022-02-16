@@ -45,6 +45,7 @@ token LexNext(lexer_state *State) {
                  ++Str) {}
             Result.Length = 1 + Str - State->Pos;
             State->Pos = Str + 1;
+            Assert(*Str == ']');
         } break;
         case ESCAPE_CHAR: {
             Result.Length = 1;
