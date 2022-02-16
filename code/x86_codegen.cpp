@@ -75,6 +75,7 @@ void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
 
 // TODO: Document the overall structure of the assembly code
 size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
+    Assert(NFA->NumStates <= 32);
     // ebx = char *CurrChar
     // eax = uint32_t ActiveStates
     // ecx = uint32_t CurrentEnables
