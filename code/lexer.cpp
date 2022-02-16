@@ -72,7 +72,7 @@ bool LexHasNextCharSetLabel(lexer_state *State) {
 
 nfa_label LexNextCharSetLabel(lexer_state *State) {
     nfa_label Result = {};
-    if (*State->Pos == '[' || *State->Pos == ESCAPE_CHAR) {
+    if (*State->Pos == ESCAPE_CHAR) {
         State->Pos += 1;
     }
     char A = *State->Pos++;

@@ -67,7 +67,7 @@ void end_to_end_RunTests(tester_state *T) {
     size_t CodeSize;
 
     // TODO: split into categories and make pretty printing like the x86 tests
-    // TODO: complete coverage
+    // TODO: check the gcov coverage report, I think this does all the features
 
     {
         const char *Regex = "test";
@@ -250,6 +250,54 @@ void end_to_end_RunTests(tester_state *T) {
         EXPECT_MATCH("g");
         EXPECT_MATCH("5");
         EXPECT_MATCH("2");
+        EXPECT_MATCH("6");
+
+        EXPECT_NO_MATCH("");
+        EXPECT_NO_MATCH("0");
+        EXPECT_NO_MATCH("l");
+        EXPECT_NO_MATCH("h");
+        EXPECT_NO_MATCH("A");
+        EXPECT_NO_MATCH("Z");
+        EXPECT_NO_MATCH("9");
+        EXPECT_NO_MATCH("tttt");
+        EXPECT_NO_MATCH("\n");
+        EXPECT_NO_MATCH("testa");
+        EXPECT_NO_MATCH("atest");
+        EXPECT_NO_MATCH("aba");
+
+        Free((void*)Match, CodeSize);
+    }
+    { // Matches nothing
+        const char *Regex = "[]+";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        EXPECT_NO_MATCH("");
+        EXPECT_NO_MATCH("0");
+        EXPECT_NO_MATCH("l");
+        EXPECT_NO_MATCH("h");
+        EXPECT_NO_MATCH("A");
+        EXPECT_NO_MATCH("Z");
+        EXPECT_NO_MATCH("9");
+        EXPECT_NO_MATCH("tttt");
+        EXPECT_NO_MATCH("\n");
+        EXPECT_NO_MATCH("testa");
+        EXPECT_NO_MATCH("atest");
+        EXPECT_NO_MATCH("aba");
+
+        Free((void*)Match, CodeSize);
+    }
+    {
+        const char *Regex = "[a-g\\]2-6\\\\]";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        EXPECT_MATCH("a");
+        EXPECT_MATCH("b");
+        EXPECT_MATCH("c");
+        EXPECT_MATCH("g");
+        EXPECT_MATCH("5");
+        EXPECT_MATCH("\\");
+        EXPECT_MATCH("2");
+        EXPECT_MATCH("]");
         EXPECT_MATCH("6");
 
         EXPECT_NO_MATCH("");

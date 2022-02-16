@@ -158,7 +158,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
 
-                lexer_state Lexer{Token.Str};
+                lexer_state Lexer{Token.Str+1};
                 while (LexHasNextCharSetLabel(&Lexer)) {
                     nfa_label Label = LexNextCharSetLabel(&Lexer);
                     NFA = NFAAddArc(Arena, Label, Transition);
