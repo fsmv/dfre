@@ -133,7 +133,11 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
     while(LexHasNext(&Lexer)) {
         token Token = LexNext(&Lexer);
 
-        switch(*Token.Str) {
+        bool ActiveChar = true;
+        if (Token.Escaped) {
+            ActiveChar = false;
+        } else {
+            switch(*Token.Str) {
             case '.': {
                 uint32_t MyState = NFA->NumStates++;
 
@@ -283,21 +287,25 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = NextOrSibling;
             } break;
-            default: {
-                uint32_t MyState = NFA->NumStates++;
+            default:
+                ActiveChar = false;
+                break;
+            }
+        }
+        if (!ActiveChar) { // the default case, or escaped case
+            uint32_t MyState = NFA->NumStates++;
 
-                nfa_label Label = {};
-                Label.Type = MATCH;
-                Label.A = *Token.Str;
+            nfa_label Label = {};
+            Label.Type = MATCH;
+            Label.A = *Token.Str;
 
-                nfa_transition Transition = {};
-                Transition.From = LastChunk.EndState;
-                Transition.To = MyState;
-                NFA = NFAAddArc(Arena, Label, Transition);
+            nfa_transition Transition = {};
+            Transition.From = LastChunk.EndState;
+            Transition.To = MyState;
+            NFA = NFAAddArc(Arena, Label, Transition);
 
-                LastChunk.StartState = LastChunk.EndState;
-                LastChunk.EndState = MyState;
-            } break;
+            LastChunk.StartState = LastChunk.EndState;
+            LastChunk.EndState = MyState;
         }
     }
     nfa_label Label = {};

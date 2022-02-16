@@ -292,4 +292,59 @@ void end_to_end_RunTests(tester_state *T) {
 
         Free((void*)Match, CodeSize);
     }
+    {
+        const char *Regex = "\\(ab\\)\\*+";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        EXPECT_MATCH("(ab)*");
+        EXPECT_MATCH("(ab)**");
+        EXPECT_MATCH("(ab)****");
+
+        EXPECT_NO_MATCH("");
+        EXPECT_NO_MATCH("ab");
+        EXPECT_NO_MATCH("abab");
+        EXPECT_NO_MATCH("(ab)");
+        EXPECT_NO_MATCH("(ab)*(ab)*");
+        EXPECT_NO_MATCH("abaa");
+        EXPECT_NO_MATCH("ababbabab");
+        EXPECT_NO_MATCH("aaaababab");
+        EXPECT_NO_MATCH("0");
+        EXPECT_NO_MATCH("l");
+
+        Free((void*)Match, CodeSize);
+    }
+    {
+        const char *Regex = "(ab)*|[3-7.]+\\**|(ggg|9)*";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        // First alternative
+        EXPECT_MATCH(""); // Also matches the third alternative
+        EXPECT_MATCH("ab");
+        EXPECT_MATCH("abab");
+        EXPECT_MATCH("ababab");
+        EXPECT_MATCH("ababababababab");
+        // Second alternative
+        EXPECT_MATCH("3....7");
+        EXPECT_MATCH("34********");
+        EXPECT_MATCH("...4....5*");
+        EXPECT_MATCH(".");
+        EXPECT_MATCH(".....");
+        // Third alternative
+        EXPECT_MATCH("ggg");
+        EXPECT_MATCH("9");
+        EXPECT_MATCH("gggggg9ggg9999ggg");
+
+        EXPECT_NO_MATCH("aba");
+        EXPECT_NO_MATCH("abb");
+        EXPECT_NO_MATCH("abaa");
+        EXPECT_NO_MATCH("ababbabab");
+        EXPECT_NO_MATCH("aaaababab");
+        EXPECT_NO_MATCH("*");
+        EXPECT_NO_MATCH("****");
+        EXPECT_NO_MATCH("gg");
+        EXPECT_NO_MATCH("tttt");
+        EXPECT_NO_MATCH("\n");
+
+        Free((void*)Match, CodeSize);
+    }
 }

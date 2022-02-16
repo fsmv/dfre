@@ -8,6 +8,7 @@ struct lexer_state {
 struct token {
     const char *Str;
     int32_t Length;
+    bool Escaped;
 };
 
 bool LexHasNext(lexer_state *State) {
@@ -47,6 +48,7 @@ token LexNext(lexer_state *State) {
         } break;
         case ESCAPE_CHAR: {
             Result.Length = 1;
+            Result.Escaped = true;
             if (*(State->Pos + 1) == '\0') {
                 State->Pos += 1;
             } else {
