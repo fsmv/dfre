@@ -140,7 +140,10 @@ GeneratedInstructions GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     *NextInstr(ret) = R32(DEC, REG, ECX, 0);
     *NextInstr(ret) = JD(JNE, ClearLoop);
 
-    *NextInstr(ret) = RI32(MOV, MEM_DISP8, EBP, 0, 1 << NFA_STARTSTATE); // Set start state as active
+    // Set the start state as active
+    const int32_t StartStateDword = ActiveStates - (NFA->StartState / 32);
+    const uint8_t StartStateBit = NFA->StartState - (32*StartStateDword);
+    *NextInstr(ret) = RI32(MOV, MEM_DISP32, EBP, StartStateDword, 1 << StartStateBit);
 
     size_t Top = ret->Count;
 

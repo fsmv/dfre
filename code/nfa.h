@@ -109,7 +109,8 @@ struct nfa_arc_list {
  *      of them. We only need to remember how many there are.
  */
 struct nfa {
-    uint32_t NumStates;
+    size_t NumStates;
+    size_t StartState;
 
     size_t NumArcListsAllocated;
     size_t NumArcLists;
@@ -152,7 +153,7 @@ nfa_arc_list *NFANextArcList(nfa_arc_list *ArcList) {
 }
 
 #define NFA_NULLSTATE ((uint32_t) -1)
-#define NFA_STARTSTATE  ((uint32_t) 1)
+#define NFA_DEFAULT_STARTSTATE  ((uint32_t) 1)
 #define NFA_ACCEPTSTATE ((uint32_t) 0)
 
 #define NFA_H_

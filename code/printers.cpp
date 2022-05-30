@@ -43,7 +43,9 @@ void PrintNFA(nfa *NFA) {
                      (NFA->NumArcListsAllocated - 1) * sizeof(nfa_arc_list);
 
     Print("Size: %u Bytes\n", NFASize);
-    Print("Number of states: %u\n\n", NFA->NumStates);
+    Print("Number of states: %u\n", NFA->NumStates);
+    Print("Start State: %u\n", NFA->StartState);
+    Print("Accept State: %u\n\n", NFA_ACCEPTSTATE);
 
     nfa_arc_list *ArcList = NFAFirstArcList(NFA);
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
