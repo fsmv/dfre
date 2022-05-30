@@ -47,9 +47,10 @@ instruction *NextInstr(GeneratedInstructions *ret) {
 void GenInstructionsTransitionSet(uint32_t FromState, GeneratedInstructions *ret) {
     // Note: bittest is weird. It takes a r/m32, imm8 argument. So we have to
     // use RI8 in this assembler API when it actually acts on a 32 bit dword.
-    const int32_t FromDword = -1 * (FromState / 32);
+    const uint32_t ActivateMask = 0; // TODO: Maybe pass in the ActivateMask address
+    const int32_t FromDword = (FromState / 32);
     const uint8_t FromBit = FromState - (32*FromDword);
-    *NextInstr(ret) = RI8(BT, MEM_DISP32, EBP, FromDword, FromBit); // Check if DisableState is active
+    *NextInstr(ret) = RI8(BT, MEM_DISP32, EBP, ActivateMask - FromDword * DWORD_TO_BYTES, FromBit); // Check if DisableState is active
     size_t Jump = ret->Count;
     *NextInstr(ret) = J(JNC); // skip the following if it's not active
 
@@ -58,8 +59,8 @@ void GenInstructionsTransitionSet(uint32_t FromState, GeneratedInstructions *ret
         if (ret->ActivateMask[i] == 0) {
           continue; // We can skip or-ing with 0, the mask is always the same
         }
-        // Set EBP[CurrentEnables[i]] = ActivateMask[i] TODO: pass in the constant??
-        *NextInstr(ret) = RI32(OR, MEM_DISP32, EBP, -1 * (ret->NumStateDwords + i) * DWORD_TO_BYTES, ret->ActivateMask[i]);
+        // Set EBP[CurrentEnables[i]] = ActivateMask[i]
+        *NextInstr(ret) = RI32(OR, MEM_DISP32, EBP, ActivateMask - (ret->NumStateDwords + i) * DWORD_TO_BYTES, ret->ActivateMask[i]);
     }
 
     ret->Instructions[Jump].JumpDestIdx = ret->Count;
@@ -141,9 +142,9 @@ GeneratedInstructions GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     *NextInstr(ret) = JD(JNE, ClearLoop);
 
     // Set the start state as active
-    const int32_t StartStateDword = ActiveStates - (NFA->StartState / 32);
+    const int32_t StartStateDword = NFA->StartState / 32;
     const uint8_t StartStateBit = NFA->StartState - (32*StartStateDword);
-    *NextInstr(ret) = RI32(MOV, MEM_DISP32, EBP, StartStateDword, 1 << StartStateBit);
+    *NextInstr(ret) = RI32(MOV, MEM_DISP32, EBP, ActiveStates - StartStateDword*DWORD_TO_BYTES, 1 << StartStateBit);
 
     size_t Top = ret->Count;
 
