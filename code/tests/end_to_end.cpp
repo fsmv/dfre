@@ -433,4 +433,29 @@ void end_to_end_RunTests(tester_state *T) {
 
         Free((void*)Match, CodeSize);
     }
+    {
+        const char *Regex = "((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        // First alternative
+        EXPECT_MATCH("a");
+
+        EXPECT_NO_MATCH("");
+        EXPECT_NO_MATCH("aa");
+        EXPECT_NO_MATCH("aaaa");
+        EXPECT_NO_MATCH("abab");
+        EXPECT_NO_MATCH("ababab");
+        EXPECT_NO_MATCH("aba");
+        EXPECT_NO_MATCH("abb");
+        EXPECT_NO_MATCH("abaa");
+        EXPECT_NO_MATCH("ababbabab");
+        EXPECT_NO_MATCH("aaaababab");
+        EXPECT_NO_MATCH("*");
+        EXPECT_NO_MATCH("****");
+        EXPECT_NO_MATCH("gg");
+        EXPECT_NO_MATCH("tttt");
+        EXPECT_NO_MATCH("\n");
+
+        Free((void*)Match, CodeSize);
+    }
 }

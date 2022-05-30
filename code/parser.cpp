@@ -6,19 +6,16 @@
 #include "nfa.h"
 #include "mem_arena.h"
 
-nfa *NFAAllocArcList(mem_arena *Arena, nfa_label Label) {
+void NFAAllocArcList(nfa *NFA, mem_arena *Arena, nfa_label Label) {
     Alloc(Arena, sizeof(nfa_arc_list));
-    nfa *NFA = (nfa *)Arena->Base;
 
     NFA->NumArcListsAllocated += 1;
     nfa_arc_list *ArcList = &NFA->_ArcLists[NFA->NumArcLists++];
     ArcList->Label = Label;
     ArcList->NumTransitions = 0;
-    return NFA;
 }
 
-nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
-    nfa *NFA = (nfa *)Arena->Base;
+void NFAAddArc(nfa *NFA, mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
     nfa_arc_list *ArcListToUse = (nfa_arc_list *) 0;
     for (size_t ArcListIdx = 0; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         nfa_arc_list *TestArcList = &NFA->_ArcLists[ArcListIdx];
@@ -30,14 +27,13 @@ nfa *NFAAddArc(mem_arena *Arena, nfa_label Label, nfa_transition Transition) {
     }
 
     if (!ArcListToUse) {
-        NFA = NFAAllocArcList(Arena, Label);
+        NFAAllocArcList(NFA, Arena, Label);
         ArcListToUse = &NFA->_ArcLists[NFA->NumArcLists - 1];
     }
 
     nfa_transition *TransitionLocation =
         &ArcListToUse->Transitions[ArcListToUse->NumTransitions++];
     *TransitionLocation = Transition;
-    return NFA;
 }
 
 /**
@@ -105,38 +101,57 @@ void NFACombineArcLists(nfa *NFA) {
     NFA->NumArcLists -= NumListsRemoved;
 }
 
+size_t CountParenChunks(const char *Regex) {
+    size_t Chunks = 0;
+    size_t Open = 0;
+    for (const char *Curr = Regex; *Curr; ++Curr) {
+        if (*Curr == '(') {
+            Open++;
+        } else if (*Curr == ')') {
+            Open--;
+            Chunks++;
+        }
+    }
+    Assert(Open == 0);
+    return Chunks;
+}
+
 struct chunk_bounds {
     uint32_t StartState;
     uint32_t EndState;
 };
 
 nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
-    Alloc(Arena, sizeof(nfa));
-    nfa *NFA = (nfa *) Arena->Base;
+    // Allocate space to store the parentheses bounds
+    const size_t NumParenChunks = CountParenChunks(Regex);
+    chunk_bounds *ParenChunks = (chunk_bounds*)Alloc(Arena,
+        NumParenChunks * sizeof(chunk_bounds));
 
+    // Used in several places in this function
+    nfa_label EpsilonLabel = {};
+    EpsilonLabel.Type = EPSILON;
+
+    // Allocate space for the NFA result and set it up
+    nfa *NFA = (nfa *)Alloc(Arena, sizeof(nfa));
     NFA->NumStates = 2; // Reserve 0 for accept, 1 for start
     NFA->NumArcLists = NFA->NumArcListsAllocated = 1; // Reserve 0 for epsilon
     NFA->StartState = NFA_DEFAULT_STARTSTATE;
-
     // Initialize the first arc list, which is always epsilon arcs
     // See x86_codegen.cpp. Epsilon arcs are a special case.
-    nfa_label EpsilonLabel = {};
-    EpsilonLabel.Type = EPSILON;
     NFA->_ArcLists[0].Label = EpsilonLabel;
     NFA->_ArcLists[0].NumTransitions = 0;
 
+    // Used to track what was written by the previous iteration of the loop so
+    // that we know what to loop over if we see a loop char like *+?
+    //
     // LastChunk.StartState == NFA_NULLSTATE means the last chunk cannot be looped
     chunk_bounds LastChunk{NFA_NULLSTATE, NFA->StartState};
-    chunk_bounds ParenChunks[32];
-    // TODO: when we have error reporting, we should check that this is 0 at the
-    // end. Currently we just ignore this and we compile the regex anyway, it
-    // results in prentending the open paren is not there at all.
+    // Used to track which level of parentheses we are currently in
     size_t NumOpenParens = 0;
     // Used to track the first time we see a | char in the regex, at which time
     // we need to replace the start state
     bool ReplacedStartState = false;
-
-    nfa_transition Transition = {}; // shared scratch space
+    nfa_transition Transition = {}; // shared scratch space used in the loop
     lexer_state Lexer{Regex};
     while(LexHasNext(&Lexer)) {
         token Token = LexNext(&Lexer);
@@ -153,7 +168,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 Label.Type = DOT;
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, Label, Transition);
+                NFAAddArc(NFA, Arena, Label, Transition);
 
                 LastChunk.StartState = LastChunk.EndState;
                 LastChunk.EndState = MyState;
@@ -166,7 +181,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 lexer_state Lexer{Token.Str+1};
                 while (LexHasNextCharSetLabel(&Lexer)) {
                     nfa_label Label = LexNextCharSetLabel(&Lexer);
-                    NFA = NFAAddArc(Arena, Label, Transition);
+                    NFAAddArc(NFA, Arena, Label, Transition);
                 }
 
                 LastChunk.StartState = LastChunk.EndState;
@@ -178,15 +193,15 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = LastChunk.StartState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 Transition.From = LastChunk.StartState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = MyState;
@@ -197,11 +212,11 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = LastChunk.StartState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = MyState;
@@ -212,18 +227,17 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 Transition.From = LastChunk.StartState;
                 Transition.To = MyState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = MyState;
             } break;
             case '(': {
-                // TODO: Allocator
-                Assert(NumOpenParens < ArrayLength(ParenChunks));
+                Assert(NumOpenParens < NumParenChunks);
                 // We need both a new start and a new end state for paren groups
                 // so that alternatives work. Ideally we would only add these
                 // states if there is an alternative group in the parens but we
@@ -243,20 +257,17 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 uint32_t NextChunk = NFA->NumStates++;
                 Transition.From = ParenChunk->StartState;
                 Transition.To = NextChunk;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = NextChunk;
             } break;
             case ')': {
-                if (NumOpenParens == 0) {
-                    // TODO: report warning / error
-                    break;
-                }
+                Assert(NumOpenParens > 0);
                 chunk_bounds *MyChunk = &ParenChunks[--NumOpenParens];
 
                 Transition.From = LastChunk.EndState;
                 Transition.To = MyChunk->EndState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 LastChunk = *MyChunk;
             } break;
@@ -272,7 +283,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                   size_t AlternativeStart = NFA->NumStates++;
                   Transition.From = AlternativeStart;
                   Transition.To = NFA->StartState;
-                  NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                  NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
                   NFA->StartState = AlternativeStart;
                 }
 
@@ -288,7 +299,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 // passing the entire alternative group. So add an epsilon arc.
                 Transition.From = LastChunk.EndState;
                 Transition.To = OrChunk.EndState;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
                 // Setup a new state for the next alternative clause. Add the
                 // epsilon arc from the alt group start state.
@@ -298,7 +309,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
                 size_t NextAlternativeClause = NFA->NumStates++;
                 Transition.From = OrChunk.StartState;
                 Transition.To = NextAlternativeClause;
-                NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+                NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
                 LastChunk.StartState = NFA_NULLSTATE;
                 LastChunk.EndState = NextAlternativeClause;
             } break;
@@ -317,7 +328,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
             nfa_transition Transition = {};
             Transition.From = LastChunk.EndState;
             Transition.To = MyState;
-            NFA = NFAAddArc(Arena, Label, Transition);
+            NFAAddArc(NFA, Arena, Label, Transition);
 
             LastChunk.StartState = LastChunk.EndState;
             LastChunk.EndState = MyState;
@@ -325,7 +336,7 @@ nfa *RegexToNFA(const char *Regex, mem_arena *Arena) {
     }
     Transition.From = LastChunk.EndState;
     Transition.To = NFA_ACCEPTSTATE;
-    NFA = NFAAddArc(Arena, EpsilonLabel, Transition);
+    NFAAddArc(NFA, Arena, EpsilonLabel, Transition);
 
     NFACombineArcLists(NFA);
     return NFA;
