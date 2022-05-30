@@ -29,7 +29,9 @@ int main(int argc, char *argv[]) {
     tester_state T = {};
     T.Arena = ArenaInit();
 
+    Print("Running opcode tests.\n");
     x86_opcode_RunTests(&T);
+    Print("Running end-to-end regex tests.\n");
     end_to_end_RunTests(&T);
 
     if (T.Failed) {

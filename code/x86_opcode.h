@@ -89,10 +89,13 @@ enum op {
     AND = 0,  // MR, RI8, RI32
     OR,       // MR, RI8, RI32
     XOR,      // MR, RI8, RI32
+    ADD,      // MR, RI8, RI32
+    SUB,      // MR, RI8, RI32
     INC,      // M, R
+    DEC,      // M, R
     NOT,      // M, R
     // Comparison
-    BT,       // RI8
+    BT,       // RI8 (special because the register arg is r/m32 but imm is 8 bit)
     CMP,      // MR, RI8, RI32
     // Memory
     MOV,      // MR, SRI32, RI8, RI32
@@ -111,7 +114,7 @@ enum op {
 };
 
 const char *op_strings[] = {
-    "AND ", "OR  ", "XOR ", "INC ", "NOT ",
+    "AND ", "OR  ", "XOR ", "ADD ", "SUB ", "INC ", "DEC ", "NOT ",
     "BT  ", "CMP ",
     "MOV ", "MOVR", "PUSH", "POP ",
     "RET ",
@@ -157,20 +160,20 @@ struct instruction {
 
 // Opcodes for args (reg, reg/mem), (reg/mem)
 const uint8_t opcode_MemReg[] =
-{ 0x20, 0x08, 0x30, 0xFE, 0xF6,
+{ 0x20, 0x08, 0x30, 0x00, 0x80, 0xFE, 0xFE, 0xF6,
   0x00, 0x38,
   0x88, 0x8A, 0xFE, 0x8E,
   0xC3};
 // Opcodes for (reg/mem, imm), (imm)
 const uint16_t opcode_Imm[] =
-{ 0x0080, 0x0080, 0x0080, 0x0000, 0x0000,
+{ 0x0080, 0x0080, 0x0080, 0x0080, 0x0080, 0x0000, 0x0000, 0x0000,
   0x0FBA, 0x0080,
   0x00C6, 0x0000, 0x0000, 0x0000,
   0x0000};
 // Used for (reg/mem, imm), (reg/mem) instructions.
 // It's the "/digit" in the Opcode column in the intel manual
 const uint8_t opcode_Extra[] = 
-{ 0x04, 0x01, 0x06, 0x00, 0x02,
+{ 0x04, 0x01, 0x06, 0x00, 0x05, 0x00, 0x01, 0x02,
   0x04, 0x07,
   0x00, 0x00, 0x06, 0x00,
   0x00};
@@ -179,7 +182,7 @@ const uint8_t opcode_Extra[] =
 //
 // Add the register code to the opcode to encode register selection
 const uint8_t opcode_ShortReg[] =
-{ 0x00, 0x00, 0x00, 0x40, 0x00,
+{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x48, 0x00,
   0x00, 0x00,
   0xB8, 0x00, 0x50, 0x58,
   0x00};
@@ -236,7 +239,7 @@ opcode_unpacked OpNoarg(op Op) {
 // TODO: Consolidate this code, very similar things are being done in all of
 // the Opcode encoders
 opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement, bool is16) {
-    Assert(Op == INC || Op == NOT || (Op == PUSH && is16) || (Op == POP && is16));
+    Assert(Op == INC || Op == DEC || Op == NOT || (Op == PUSH && is16) || (Op == POP && is16));
     opcode_unpacked Result = {};
 
     if (is16 && Mode == REG && opcode_ShortReg[Op] != 0) {
@@ -286,7 +289,7 @@ opcode_unpacked OpReg(op Op, addressing_mode Mode, reg Reg, int32_t Displacement
 }
 
 opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displacement, reg SrcReg, bool is16) {
-    Assert(Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV || Op == MOVR);
+    Assert(Op == AND || Op == OR || Op == XOR || Op == ADD || Op == SUB || Op == CMP || Op == MOV || Op == MOVR);
 
     opcode_unpacked Result = {};
 
@@ -335,14 +338,14 @@ opcode_unpacked OpRegReg(op Op, addressing_mode Mode, reg DestReg, int32_t Displ
 }
 
 opcode_unpacked OpRegImm(op Op, addressing_mode Mode, reg DestReg, int32_t Displacement, uint32_t Imm, bool is16) {
-    Assert((!is16 && Op == BT) || Op == AND || Op == OR || Op == XOR || Op == CMP || Op == MOV);
+    Assert((!is16 && Op == BT) || Op == AND || Op == OR || Op == XOR || Op == ADD || Op == SUB || Op == CMP || Op == MOV);
     opcode_unpacked Result = {};
 
     if (is16 && Mode == REG && opcode_ShortReg[Op] != 0) {
         Result.Opcode[1] = opcode_ShortReg[Op] + (uint8_t)DestReg;
         Result.HasModRM = false;
     } else {
-        if (Mode == REG) {
+        if (Mode == REG && !is16) {
             // These would encode AH, CD, DH, BH respectively
             // See Section 2.1.5 Table 2-2, top row, this is an r8 argument
             Assert(DestReg != ESP && DestReg != EBP && DestReg != ESI && DestReg != EDI);

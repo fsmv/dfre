@@ -4,14 +4,10 @@
 #include "nfa.h"
 #include "x86_opcode.h"
 
-// For writing instrucions to an arena
-#define NextInstr() (*((instruction*)(Alloc(Arena, sizeof(instruction)))))
-#define PeekIdx() (Arena->Used / sizeof(instruction))
-#define Instr(idx) ((instruction*)(Arena->Base) + idx)
+#define DWORD_TO_BYTES 4
 
 void NFASortArcList(nfa_arc_list *ArcList) {
     // TODO(fsmv): Replace with radix sort or something
-
     for (size_t ATransitionIdx = 0;
          ATransitionIdx < ArcList->NumTransitions;
          ++ATransitionIdx)
@@ -32,83 +28,168 @@ void NFASortArcList(nfa_arc_list *ArcList) {
     }
 }
 
-void GenInstructionsTransitionSet(uint32_t DisableState, uint32_t ActivateMask,
-                                  mem_arena *Arena)
-{
-    NextInstr() = RI8(BT, REG, EAX, 0, (uint8_t) DisableState); // Check if DisableState is active
-    size_t Jump = PeekIdx();
-    NextInstr() = J(JNC); // skip the following if it's not active
+struct GeneratedInstructions {
+  instruction *Instructions;
+  size_t Count;
 
-    NextInstr() = RI32(OR, REG, ECX, 0, ActivateMask); // Remember to activate the activate states
+  //private:
+  mem_arena *Arena;
+  uint32_t NumStateDwords;
+  uint32_t *ActivateMask;
+};
 
-    Instr(Jump)->JumpDestIdx = PeekIdx();
+instruction *NextInstr(GeneratedInstructions *ret) {
+  instruction *Result = (instruction *)Alloc(ret->Arena, sizeof(instruction));
+  ret->Count += 1;
+  return Result;
 }
 
-void GenInstructionsArcList(nfa_arc_list *ArcList, mem_arena *Arena) {
+void GenInstructionsTransitionSet(uint32_t FromState, GeneratedInstructions *ret) {
+    // Note: bittest is weird. It takes a r/m32, imm8 argument. So we have to
+    // use RI8 in this assembler API when it actually acts on a 32 bit dword.
+    const int32_t FromDword = -1 * (FromState / 32);
+    const uint8_t FromBit = FromState - (32*FromDword);
+    *NextInstr(ret) = RI8(BT, MEM_DISP32, EBP, FromDword, FromBit); // Check if DisableState is active
+    size_t Jump = ret->Count;
+    *NextInstr(ret) = J(JNC); // skip the following if it's not active
+
+    // Remember to activate the activate states
+    for (size_t i = 0; i < ret->NumStateDwords; ++i) {
+        if (ret->ActivateMask[i] == 0) {
+          continue; // We can skip or-ing with 0, the mask is always the same
+        }
+        // Set EBP[CurrentEnables[i]] = ActivateMask[i] TODO: pass in the constant??
+        *NextInstr(ret) = RI32(OR, MEM_DISP32, EBP, -1 * (ret->NumStateDwords + i) * DWORD_TO_BYTES, ret->ActivateMask[i]);
+    }
+
+    ret->Instructions[Jump].JumpDestIdx = ret->Count;
+}
+
+void GenInstructionsArcList(nfa_arc_list *ArcList, GeneratedInstructions *ret) {
     NFASortArcList(ArcList);
 
     uint32_t DisableState = (uint32_t) -1;
-    // TODO(fsmv): big int here
-    uint32_t ActivateMask = 0;
     for (size_t TransitionIdx = 0;
          TransitionIdx < ArcList->NumTransitions;
          ++TransitionIdx)
     {
         nfa_transition *Arc = &ArcList->Transitions[TransitionIdx];
 
-        if (Arc->From != DisableState) {
+        // Calculate where to set the bit in the ActivateMask
+        const uint32_t ActivateDword = Arc->To / 32;
+        const uint32_t ActivateBit = 1 << (Arc->To - (ActivateDword*32));
+
+        if (Arc->From != DisableState) { // New from state
+            // Write the transition set code at the end of each group of Arcs
+            // that have the same Arc->From state
             if (DisableState != (uint32_t)-1) {
-                GenInstructionsTransitionSet(DisableState, ActivateMask, Arena);
+                GenInstructionsTransitionSet(DisableState, ret);
             }
 
-            ActivateMask = (1 << Arc->To);
-            DisableState = Arc->From;
-        } else {
-            ActivateMask |= (1 << Arc->To);
+            // Clear the activate mask, starting a new group of Arcs
+            for (size_t i = 0; i < ret->NumStateDwords; ++i) {
+                ret->ActivateMask[i] = 0;
+            }
+            DisableState = Arc->From; // Remember which group we're working on
         }
+        ret->ActivateMask[ActivateDword] |= ActivateBit;
     }
 
+    // Write the code for the last group of Arcs
     if (DisableState != (uint32_t)-1) {
-        GenInstructionsTransitionSet(DisableState, ActivateMask, Arena);
+        GenInstructionsTransitionSet(DisableState, ret);
     }
 }
 
+
 // TODO: Document the overall structure of the assembly code
-size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
-    Assert(NFA->NumStates <= 32);
+GeneratedInstructions GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // ebx = char *CurrChar
-    // eax = uint32_t ActiveStates
-    // ecx = uint32_t CurrentEnables
-    // edx = uint32_t CurrentDisables
+    // ebp[0:NumStateBytes] = ActiveStates
+    // ebp[NumStateBytes:2*NumStateBytes] = CurrentEnables
+    // ebp[2*NumStateBytes:3*NumStateBytes] = CurrentDisables
 
-    NextInstr() = R32(PUSH, REG, EBX, 0); // Callee save
-    NextInstr() = RR32(MOVR, MEM_DISP8, ESP, EBX, 8); // Get pointer to the search string off the stack
+    const uint32_t NumStateDwords = DivCeil(NFA->NumStates, 32);
+    const uint32_t NumStateBytes = NumStateDwords * DWORD_TO_BYTES;
+    // EBP byte offsets for these stack arrays arrays
+    const int32_t ActiveStates = 0;
+    const int32_t CurrentEnables = -1 * NumStateBytes;
+    const int32_t CurrentDisables = -2 * NumStateBytes;
 
-    NextInstr() = RI32(MOV, REG, EAX, 0, 1 << NFA_STARTSTATE); // Set start state as active
+    GeneratedInstructions Result = {};
+    Result.Instructions = (instruction *)(Arena->Base + NumStateBytes);
+    Result.Arena = Arena;
+    Result.NumStateDwords = NumStateDwords;
+    Result.ActivateMask = (uint32_t *)Alloc(Arena, NumStateBytes);
+    GeneratedInstructions *ret = &Result; // Just an alias for consistency
 
-    size_t Top = PeekIdx();
+    *NextInstr(ret) = R32(PUSH, REG, EBP, 0); // Callee save
+    *NextInstr(ret) = R32(PUSH, REG, EBX, 0); // Callee save
+    *NextInstr(ret) = R32(PUSH, REG, ESI, 0); // Callee save
+    *NextInstr(ret) = RR32(MOV, REG, EBP, ESP, 0); // save the start of the stack
+
+    *NextInstr(ret) = RR32(MOVR, MEM_DISP32, ESP, EBX, 4*DWORD_TO_BYTES); // Get pointer to the search string off the stack
+
+    *NextInstr(ret) = RI32(SUB, REG, ESP, 0, 3*NumStateBytes); // Make room for ActiveStates, CurrentEnables, CurrentDisables on the stack
+    // Loop to clear the stack memory we just allocated
+    *NextInstr(ret) = RR32(MOV, REG, ESI, EBP, 0); // We will increment ESI as we loop
+    *NextInstr(ret) = RI32(MOV, REG, ECX, 0, 3*NumStateDwords); // Set the counter for the loop
+    size_t ClearLoop = ret->Count;
+    *NextInstr(ret) = RI32(MOV, MEM, ESI, 0, 0);
+    *NextInstr(ret) = RI32(SUB, REG, ESI, 0, 4/*bytes_per_dword*/);
+    *NextInstr(ret) = R32(DEC, REG, ECX, 0);
+    *NextInstr(ret) = JD(JNE, ClearLoop);
+
+    *NextInstr(ret) = RI32(MOV, MEM_DISP8, EBP, 0, 1 << NFA_STARTSTATE); // Set start state as active
+
+    size_t Top = ret->Count;
 
     // Loop following epsilon arcs until following doesn't activate any new states
-    size_t EpsilonLoopStart = PeekIdx();
+    size_t EpsilonLoopStart = ret->Count;
     // Epsilon arcs, garunteed to be the first arc list
     // TODO: Is this premature opmtimisation? We could just search for epsilon
     // like we do below for the dot arc list.
     nfa_arc_list *EpsilonArcs = NFAFirstArcList(NFA);
     Assert(EpsilonArcs->Label.Type == EPSILON);
-    NextInstr() = RR32(XOR, REG, ECX, ECX, 0); // Clear states to enable
-    NextInstr() = RR32(MOV, REG, EDX, EAX, 0); // Save current active states list
-    GenInstructionsArcList(EpsilonArcs, Arena);
-    NextInstr() = RR32(OR, REG, EAX, ECX, 0);  // Enable the states to enable
-    NextInstr() = RR32(CMP, REG, EDX, EAX, 0); // Check if active states has changed
-    NextInstr() = JD(JNE, EpsilonLoopStart);
 
-    NextInstr() = RI8(CMP, MEM, EBX, 0, 0); // If we're at the end, stop
-    size_t JmpToEnd = PeekIdx();
-    NextInstr() = J(JE);
+    // (Ab)Use the CurrentDisables storage to save the state of the active states (unrolled loop)
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = RR32(MOV, MEM_DISP32, EBP, EAX, CurrentDisables - i*DWORD_TO_BYTES);
+    }
+    GenInstructionsArcList(EpsilonArcs, ret);
 
-    NextInstr() = RR32(XOR, REG, ECX, ECX, 0); // Clear states to enable
-    NextInstr() = RR32(MOV, REG, EDX, EAX, 0); // Save current active states list
-    NextInstr() = R32(NOT, REG, EDX, 0); // Remember to disable any currently active state
+    // Unrolled loop to enable the states from the epsilon arcs
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, CurrentEnables - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = RR32(OR, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES);  // Enable the states to enable
+    }
+
+    // Unrolled loop to check if we're done iterating on the epsilon arcs.
+    //
+    // Stops jumping back to the top when the epsilon arcs did not activate any
+    // new states.
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, CurrentDisables - i*DWORD_TO_BYTES); // Copy the Disable byte to eax
+      *NextInstr(ret) = RR32(CMP, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES); // Check if active states has changed
+      *NextInstr(ret) = JD(JNE, EpsilonLoopStart); // jump to the top if changed
+    }
+
+    // If we found the end of the string, stop processing now
+    *NextInstr(ret) = RI8(CMP, MEM, EBX, 0, 0);
+    size_t JmpToEnd = ret->Count;
+    *NextInstr(ret) = J(JE);
+
+    // Clear states to enable
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RI32(MOV, MEM_DISP32, EBP, CurrentEnables - i*DWORD_TO_BYTES, 0);
+    }
+    // Set CurrentDisables to disable the active states, before we consume input
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = RR32(MOV, MEM_DISP32, EBP, EAX, CurrentDisables - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = R32(NOT, MEM_DISP32, EBP, CurrentDisables - i*DWORD_TO_BYTES);
+    }
 
     nfa_arc_list *StartList = NFANextArcList(EpsilonArcs);
 
@@ -120,24 +201,24 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
         }
         DotArcs = NFANextArcList(DotArcs);
     }
-    GenInstructionsArcList(DotArcs, Arena);
+    GenInstructionsArcList(DotArcs, ret);
 
     // Range arcs
     nfa_arc_list *ArcList = StartList;
     for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type == RANGE) {
-            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
-            size_t Jump1 = PeekIdx();
-            NextInstr() = J(JL);
+            *NextInstr(ret) = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
+            size_t Jump1 = ret->Count;
+            *NextInstr(ret) = J(JL);
 
-            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.B);
-            size_t Jump2 = PeekIdx();
-            NextInstr() = J(JG);
+            *NextInstr(ret) = RI8(CMP, MEM, EBX, 0, ArcList->Label.B);
+            size_t Jump2 = ret->Count;
+            *NextInstr(ret) = J(JG);
 
-            GenInstructionsArcList(ArcList, Arena);
+            GenInstructionsArcList(ArcList, ret);
 
-            Instr(Jump1)->JumpDestIdx = PeekIdx();
-            Instr(Jump2)->JumpDestIdx = PeekIdx();
+            ret->Instructions[Jump1].JumpDestIdx = ret->Count;
+            ret->Instructions[Jump2].JumpDestIdx = ret->Count;
         }
         ArcList = NFANextArcList(ArcList);
     }
@@ -153,12 +234,12 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     ArcList = StartList;
     for (size_t ArcListIdx = 1; ArcListIdx < NFA->NumArcLists; ++ArcListIdx) {
         if (ArcList->Label.Type == MATCH) {
-            NextInstr() = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
-            size_t NextMatchCharJmp = PeekIdx();
-            NextInstr() = J(JE);
+            *NextInstr(ret) = RI8(CMP, MEM, EBX, 0, ArcList->Label.A);
+            size_t NextMatchCharJmp = ret->Count;
+            *NextInstr(ret) = J(JE);
             // do a linked list so we can find where to fill in the jump dests
             if (LastMatchCharJmp != (size_t)-1) {
-                Instr(LastMatchCharJmp)->JumpDestIdx = NextMatchCharJmp;
+                ret->Instructions[LastMatchCharJmp].JumpDestIdx = NextMatchCharJmp;
             } else {
                 StartMatchCharJmp = NextMatchCharJmp;
             }
@@ -170,9 +251,9 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
     // jump to the end if it's not a character we want to match
     {
         // again, do a linked list so we can fill in the jump dests
-        size_t NextMatchEndJmp = PeekIdx();
-        NextInstr() = J(JMP);
-        Instr(NextMatchEndJmp)->JumpDestIdx = LastMatchEndJmp;
+        size_t NextMatchEndJmp = ret->Count;
+        *NextInstr(ret) = J(JMP);
+        ret->Instructions[NextMatchEndJmp].JumpDestIdx = LastMatchEndJmp;
         LastMatchEndJmp = NextMatchEndJmp;
     }
 
@@ -182,40 +263,50 @@ size_t GenerateInstructions(nfa *NFA, mem_arena *Arena) {
         if (ArcList->Label.Type == MATCH) {
             // Fill the last jump dest in the linked list with this location,
             // then advance the linked list
-            size_t NextMatchCharJmp = Instr(StartMatchCharJmp)->JumpDestIdx;
-            Instr(StartMatchCharJmp)->JumpDestIdx = PeekIdx();
+            size_t NextMatchCharJmp = ret->Instructions[StartMatchCharJmp].JumpDestIdx;
+            ret->Instructions[StartMatchCharJmp].JumpDestIdx = ret->Count;
             StartMatchCharJmp = NextMatchCharJmp;
 
-            GenInstructionsArcList(ArcList, Arena);
+            GenInstructionsArcList(ArcList, ret);
 
             // again, do a linked list so we can fill in the jump dests
-            size_t NextMatchEndJmp = PeekIdx();
-            NextInstr() = J(JMP);
-            Instr(NextMatchEndJmp)->JumpDestIdx = LastMatchEndJmp;
+            size_t NextMatchEndJmp = ret->Count;
+            *NextInstr(ret) = J(JMP);
+            ret->Instructions[NextMatchEndJmp].JumpDestIdx = LastMatchEndJmp;
             LastMatchEndJmp = NextMatchEndJmp;
         }
         ArcList = NFANextArcList(ArcList);
     }
 
     // Fill in the break jump locations
-    size_t MatchEnd = PeekIdx();
+    size_t MatchEnd = ret->Count;
     while(LastMatchEndJmp != (size_t)-1) {
-        size_t NextMatchEndJmp = Instr(LastMatchEndJmp)->JumpDestIdx;
-        Instr(LastMatchEndJmp)->JumpDestIdx = MatchEnd;
+        size_t NextMatchEndJmp = ret->Instructions[LastMatchEndJmp].JumpDestIdx;
+        ret->Instructions[LastMatchEndJmp].JumpDestIdx = MatchEnd;
         LastMatchEndJmp = NextMatchEndJmp;
     }
 
-    NextInstr() = RR32(AND, REG, EAX, EDX, 0); // Disabled the states to disable
-    NextInstr() = RR32(OR, REG, EAX, ECX, 0);  // Enable the states to enable
+    // Disable the states to disable, and enable the states to enable (unrolled)
+    for (size_t i = 0; i < NumStateDwords; ++i) {
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, CurrentDisables - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = RR32(AND, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES); // Disable the states to disable
+      *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, CurrentEnables - i*DWORD_TO_BYTES);
+      *NextInstr(ret) = RR32(OR, MEM_DISP32, EBP, EAX, ActiveStates - i*DWORD_TO_BYTES); // Enable the states to enable
+    }
 
-    NextInstr() = R32(INC, REG, EBX, 0); // Next char in string
-    NextInstr() = JD(JMP, Top);
+    *NextInstr(ret) = R32(INC, REG, EBX, 0); // Next char in string
+    *NextInstr(ret) = JD(JMP, Top);
 
-    Instr(JmpToEnd)->JumpDestIdx = PeekIdx();
-    // Return != 0 if accept state was active, 0 otherwise
-    NextInstr() = RI32(AND, REG, EAX, 0, 1 << NFA_ACCEPTSTATE);
-    NextInstr() = R32(POP, REG, EBX, 0); // Callee save
-    NextInstr() = RET;
+    ret->Instructions[JmpToEnd].JumpDestIdx = ret->Count;
+    // Return != 0 in eax if accept state was active, 0 otherwise
+    *NextInstr(ret) = RR32(MOVR, MEM_DISP32, EBP, EAX, ActiveStates);
+    *NextInstr(ret) = RI32(AND, REG, EAX, 0, 1 << NFA_ACCEPTSTATE);
 
-    return PeekIdx();
+    *NextInstr(ret) = RR32(MOV, REG, ESP, EBP, 0); // restore the stack
+    *NextInstr(ret) = R32(POP, REG, ESI, 0); // Callee save
+    *NextInstr(ret) = R32(POP, REG, EBX, 0); // Callee save
+    *NextInstr(ret) = R32(POP, REG, EBP, 0); // Callee save
+    *NextInstr(ret) = RET;
+
+    return Result;
 }

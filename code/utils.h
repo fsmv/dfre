@@ -13,6 +13,7 @@ inline void _AssertFailed(int LineNum, const char *File, const char *Condition) 
 
 #define ArrayLength(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define Max(v1, v2) ((v1) >= (v2) ? (v1) : (v2))
+#define DivCeil(x, y) ((x) / (y) + ((x) % (y) > 0))
 
 inline
 void MemCopy(void *Dest, const void *Src, size_t NumBytes) {

@@ -56,8 +56,9 @@ int CompileAndMatch(bool Verbose, char *Regex, char *Word) {
     // TODO: ARM support
 
     // Convert the NFA into an intermediate code representation
-    size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
-    instruction *Instructions = (instruction *)ArenaB.Base;
+    GeneratedInstructions Generated = GenerateInstructions(NFA, &ArenaB);
+    size_t InstructionsGenerated = Generated.Count;
+    instruction *Instructions = Generated.Instructions;
 
     if (!Word || Verbose) {
         Print("\n----------------- Instructions ----------------\n\n");

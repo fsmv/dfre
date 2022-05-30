@@ -14,8 +14,9 @@ dfreMatch CompileRegex(const char *Regex, size_t *CodeSize) {
 
     nfa *NFA = RegexToNFA(Regex, &ArenaA);
     // Convert the NFA into an intermediate code representation
-    size_t InstructionsGenerated = GenerateInstructions(NFA, &ArenaB);
-    instruction *Instructions = (instruction *)ArenaB.Base;
+    GeneratedInstructions Generated = GenerateInstructions(NFA, &ArenaB);
+    size_t InstructionsGenerated = Generated.Count;
+    instruction *Instructions = Generated.Instructions;
     // Allocate storage for the unpacked x86 opcodes
     NFA = (nfa*)0;
     ArenaA.Used = 0;
@@ -363,6 +364,43 @@ void end_to_end_RunTests(tester_state *T) {
     }
     {
         const char *Regex = "(ab)*|[3-7.]+\\**|(ggg|9)*";
+        auto Match = CompileRegex(Regex, &CodeSize);
+
+        // First alternative
+        EXPECT_MATCH(""); // Also matches the third alternative
+        EXPECT_MATCH("ab");
+        EXPECT_MATCH("abab");
+        EXPECT_MATCH("ababab");
+        EXPECT_MATCH("ababababababab");
+        // Second alternative
+        EXPECT_MATCH("3....7");
+        EXPECT_MATCH("34********");
+        EXPECT_MATCH("...4....5*");
+        EXPECT_MATCH(".");
+        EXPECT_MATCH(".....");
+        // Third alternative
+        EXPECT_MATCH("ggg");
+        EXPECT_MATCH("9");
+        EXPECT_MATCH("gggggg9ggg9999ggg");
+
+        EXPECT_NO_MATCH("aba");
+        EXPECT_NO_MATCH("abb");
+        EXPECT_NO_MATCH("abaa");
+        EXPECT_NO_MATCH("ab5");
+        EXPECT_NO_MATCH("abggg");
+        EXPECT_NO_MATCH("ab99");
+        EXPECT_NO_MATCH("ababbabab");
+        EXPECT_NO_MATCH("aaaababab");
+        EXPECT_NO_MATCH("*");
+        EXPECT_NO_MATCH("****");
+        EXPECT_NO_MATCH("gg");
+        EXPECT_NO_MATCH("tttt");
+        EXPECT_NO_MATCH("\n");
+
+        Free((void*)Match, CodeSize);
+    }
+    {
+        const char *Regex = "(ab)*|[3-7.]+\\**|(ggg|9)*|[a0-15-6]+|\\.\\.+|ansuehsntuasnthueoshuashouahseuoasnhtheuoanshtheouaeuaheouabuonb";
         auto Match = CompileRegex(Regex, &CodeSize);
 
         // First alternative
